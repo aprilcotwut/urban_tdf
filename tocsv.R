@@ -1,12 +1,14 @@
-# # # # # #
-# Fuck u  #
-# # # # # #
-library(xlsx)
+# # # # # # # # # # # # #
+# converts xlsx -> csv  #
+# # # # # # # # # # # # #
+library(rio)
 
-files = system("ls | grep .xlsx", intern = TRUE)
+dir <- "Historical_daily_obs"
+sys_call <- paste("ls", dir, "| grep .xlsx", sep = " ")
+
+files - system(sys_call, intern = TRUE)
 
 for (file in files) {
-  data = read.xlsx2(file, sheetName = "Sheet1")
-  file_name = paste(strplit(file, "\\.")[[1]][1], ".csv", sep = "")
-  write.csv(data, file = file_name, sep=",")
+  path <- paste(dir, file, sep="/")
+  created <- mapply(convert, path, gsub("xlsx", "csv", path))
 }
