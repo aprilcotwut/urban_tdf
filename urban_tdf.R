@@ -73,6 +73,25 @@ rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
   return(extremes)
 }
 
+estimateGOF <- function(fits) {
+  AIC <- c()
+  MLE <- c()
+  for (j in 1:length(fits)) {
+    MLE[j] = fits[[j]]$results$value
+    try({AIC[j] <- as.double(summary(fits[[j]])$AIC)})
+    if(is.null(AIC[j]) | is.na(AIC[j])) {
+      AIC[j] = NaN
+    }
+  } if (min(AIC) == NA) {
+    print(i)
+    best_fit = fits[[which.min(MLE) + 2]]
+  } else {
+    best_fit = fits[[which.min(AIC) + 2]]
+  }
+  return(best_fit)
+}
+
+
 # TDF takes in data, durations, and season. The data should contain a column of
 # dates in the first column (mm-dd-yyyy format) and a column of data in the
 # second column. The durations can be a vector of day lengths which you wish to
@@ -156,33 +175,25 @@ IDF <- function(data, durations, season, extreme = "max", forceGev = TRUE) {
           ~ poly(((Year - start_year)/ data_years), 1, raw = TRUE), scale.fun =
           ~ poly(((Year - start_year)/ data_years), 2, raw = TRUE), units = "deg F")
     }
-    rm(j)
     # Find best fit
-
     num_params = c()
+    best_fits = list()
     for (j in 1:length(fits[[i]])) {
       num_params[j] = length(fits[[i]][[j]]$results$value)
     }
-    #
-    # TODO: For the below determine which has the "best fit" for a specfic # of
-    # paramaters
-    #
-    AIC <- c()
-    MLE <- c()
-    for (j in 1:length(fits[[i]])) {
-      MLE[j] = fits[[i]][[j]]$results$value
-      try({AIC[j] <- as.double(summary(fits[[i]][[j]])$AIC)})
-      if(is.null(AIC[j]) | is.na(AIC[j])) {
-        AIC[j] = NaN
+    for (j in min(num_params):max(num_params)) {
+      index = which(num_params %in% j)
+      if(!(length(index) == 0)) {
+        for(k in index) {
+          best_fits <- append(best_fits, GOF(fits[[i]][[index]]))
+        }
       }
     }
-    } if (min(AIC) == NA) {
-      print(i)
-      best_fit = fits[[i]][[which.min(MLE) + 2]]
-      worst_fit = fits[[i]][[which.max(MLE) + 2]]
-    } else {
-      best_fit = fits[[i]][[which.min(AIC) + 2]]
-      worst_fit = fits[[i]][[which.max(AIC) + 2]]
+    for (j in 1:(length(best_fits)-1)) {
+      lr = lr.test(best_fits[[j]], best_fits[[j+1]])
+      if (test$p.value < 0.05) {
+        new_best = best_fits[[j+1]]
+      }
     }
   }
 }
