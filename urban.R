@@ -40,26 +40,28 @@ file.Setup <- function(dir, durations, r_periods, season) {
 }
 
 year.Range <- function(data) {
-  return(1980:2018)
+  start <- format(as.Date(min(data$DATE)), format="%Y")
+  end <- format(as.Date(max(data$DATE)), format="%Y")
+  return(start:end)
 }
 
 season.Setup <- function(season) {
   if ((season == 1) | (season == "winter")) {
     start_day <- "2999-12-01"
     end_day <- "2999-02-28"
-    season = "winter"
+    season <- "winter"
   } else if ((season == 2) | (season == "spring")) {
     start_day <- "2999-03-01"
     end_day <- "2999-05-31"
-    season = "spring"
+    season <- "spring"
   } else if ((season == 3) | (season == "summer")) {
     start_day <- "2999-06-01"
     end_day <- "2999-08-31"
-    season = "summer"
+    season <- "summer"
   } else if ((season = 4) | (season == "fall")) {
     start_day <- "2999-09-01"
     end_day <- "2999-11-30"
-    season = "fall"
+    season <- "fall"
   }
   return(list(start=start_day, end=end_day, season=season))
 }
@@ -67,40 +69,29 @@ season.Setup <- function(season) {
 duration.Setup <- function(duration, days) {
     if (duration%%2 == 1) {
       adj <- (duration-1)/2
-      print(days$start)
       dur_start <- format((as.Date(days$start) - adj), format="%m-%d")
-      print(days$end)
       dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
-      print("complete")
     } else if (duration%%2 == 0) {
       adj <- duration/2
-      print(days$start)
       dur_start <- format((as.Date(days$start) - adj + 1), format="%m-%d")
-      print(days$end)
       dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
-      print("complete")
     }
-    print(dur_start)
-    print(dur_end)
     return(list(start=dur_start, end=dur_end))
 }
 
 rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
+  extremes = c()
   for (yr in years) {
     # Grab the dataset for each year
     if (days$start == "12-01") {
-      if(leap_year(yr)) {
+      days$end <- "02-28"
+      if(leap_year(yr+1)) {
         days$end <- "02-29"
       }
-      tmp <- subset(data, (format(as.Date(DATE,format = "%m-%d-%Y"),"%Y") == yr)
-          | (format(as.Date(DATE,format = "%m-%d-%Y"),"%Y") == yr + 1))
-      dates <- seq(as.Date(paste(yr, days$start, sep="-")),
-          as.Date(paste(yr + 1, days$end, sep="-")), by = "day")
-    } else {
-      tmp <- subset(data, format(as.Date(DATE,format = "%m-%d-%Y"),"%Y") == yr)
-      dates <- seq(as.Date(paste(yr, days$start, sep="-")),
-          as.Date(paste(yr, days$end, sep="-")), by = "day")
     }
+    dates <- seq(as.Date(paste(yr, days$start, sep="-")),
+        as.Date(paste(yr + 1, days$end, sep="-")), by = "day")
+    tmp <- subset(data, as.Date(DATE,format = "%m-%d-%Y") %in% dates)
     # Double check for complete data
     tmp <- tmp %>%
         mutate(DATE = as.Date(DATE)) %>%
@@ -110,12 +101,12 @@ rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
     tmp <- rollmean(tmp$DATA, duration, align = "center")
     extremes <- tryCatch(rbind(extremes, cbind.data.frame(yr,
         get(extreme)(tmp))), error = function(e) print("try-error"))
-    if (class(extremes) == "character") {
-      extremes <- cbind.data.frame(yr, get(extreme)(tmp))
-      names(extremes) <- c("YEAR", "DATA")
-      extremes$DATA <- as.double(extremes$DATA)
-    }
+    # if (class(extremes) == "character") {
+    #   extremes <- cbind.data.frame(yr, get(extreme)(tmp))
+    #   extremes$DATA <- as.double(extremes$DATA)
+    # }
   }
+  names(extremes) <- c("YEAR", "DATA")
   return(extremes)
 }
 
@@ -123,17 +114,14 @@ estimate.GOF <- function(fits) {
   AIC <- c()
   MLE <- c()
   for (j in 1:length(fits)) {
-    MLE[j] = fits[[j]]$results$value
-    try({AIC[j] <- as.double(summary(fits[[j]])$AIC)})
-    if(is.null(AIC[j]) | is.na(AIC[j])) {
-      AIC[j] = NaN
-    }
+    MLE <- append(MLE, fits[[j]]$results$value)
+    try({AIC <- append(AIC, as.double(summary(fits[[j]]$AIC)))})
+    print("sadasda")
   }
-  if (min(AIC) == NA) {
-    print(i)
-    best_fit = fits[[which.min(MLE) + 2]]
-  } else {
+  if (length(AIC) != 0) {
     best_fit = fits[[which.min(AIC) + 2]]
+  } else {
+    best_fit = fits[[which.min(MLE) + 2]]
   }
   return(best_fit)
 }
@@ -166,8 +154,9 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
   fits <- list()
   return_vals = list()
 
-  # Rename data to generalize
+  # Data fixes and generalizations
   names(data) <- c("DATE", "DATA")
+  data$DATE <- as.POSIXct(data$DATE)
 
   # Season setup
   season_init <- season.Setup(season)
@@ -182,10 +171,6 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
   for (i in 1:length(durations)) {
     return_vals[[i]] = list()
     dur_init <- duration.Setup(durations[i], season_init)
-    # Save the data from within this window to develop the rolling means
-    data <- subset(data, format(as.Date(DATE,format = "%m-%d-%Y"),"%m-%d") >=
-        dur_init$start & format(as.Date(DATE,format = "%m-%d-%Y"),"%m-%d") <=
-        dur_init$end)
     # Apply rolling mean block maxima
     extremes[[i]] <- rolling.BlockMaxima(year_range, dur_init, durations[i], data)
     # Begin trend tests
@@ -252,9 +237,7 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
     for (j in min(num_params):max(num_params)) {
       index = which(num_params %in% j)
       if(!(length(index) == 0)) {
-        for(k in index) {
           best_fits <- append(best_fits, estimate.GOF(fits[[i]][[index]]))
-        }
       }
     }
     new_best = best_fits[[1]]
@@ -318,7 +301,7 @@ names(data) = cities
 for (i in 1:length(files)) {
   path <- file.path(dir, files[i])
   data[[cities[i]]] <- read.csv(path, header = TRUE)
-  data[[cities[i]]] = subset(data[[cities[i]]], names(data[[cities[i]]]) == data_cols)
+  data[[cities[i]]] <- select(data[[cities[i]]], one_of(data_cols))
 }
 
 test <- select(data$SLC, c("YEAR", "MO", "DA", "TEMP"))
@@ -327,6 +310,7 @@ test$DATE <- as.POSIXct(test$DATE)
 
 durations = c(1,2,3,4,5,6,7,10)
 seasons = c(1,2,3,4)
+print("Begin analysis:")
 for(season in seasons) {
   returns = IDF(test, durations, 2, season, extreme="max", forceGev = FALSE, dir = "SLC")
 }
