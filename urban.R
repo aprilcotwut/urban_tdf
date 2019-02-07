@@ -194,7 +194,7 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
   if ((season == 1) | season=="winter") {
     year_range = year_range[1:(length(year_range)-1)]
   }
-  data_years = year_range[length(year_range)] - year_range[1]
+  data_years = length(year_range)
   # Duration setup and block maxima
   for (i in 1:length(durations)) {
     return_vals[[i]] = list()
@@ -262,40 +262,46 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     for (j in 1:length(fits[[i]])) {
       num_params[j] = length(fits[[i]][[j]]$results$par)
     }
+    k = 1
     for (j in min(num_params):max(num_params)) {
       index = which(num_params %in% j)
       if(!(length(index) == 0)) {
           tmp <- fits[[i]][[index]]
-          return(tmp)
-          best_fits <- append(best_fits, estimate.GOF(tmp))
+          best_fits[[k]] <- estimate.GOF(tmp)
+          k = k + 1
       }
     }
     new_best = best_fits[[1]]
     for (j in 2:length(best_fits)) {
       lr = lr.test(new_best, best_fits[[j]])
-      if (test$p.value < 0.05) {
+      if (lr$p.value < 0.05) {
         new_best = best_fits[[j+1]]
       }
     }
-    scaled_range = (year_range - year_range[1])/(length(year_range) - 1)
+    return(new_best)
+    scaled_range = (year_range - year_range[1])/data_years
     threshold = seq()
     lin_par = c("mu1", "sigma1")
     quad_par = c("mu2", "sigma2")
     params = intersect(lin_par, names(new_best$results$par))
-    vals = list()
-    for (val in params) {
-      assign(val, lin_seq)
-      vals[[val]] = get(val)
+    if (is_empty(params)) {
+      v = make.qcov(new_best)
+    } else {
+      vals = list()
+      for (val in params) {
+        assign(val, lin_seq)
+        vals[[val]] = get(val)
+      }
+      params = intersect(quad_par, names(new_best$results$par))
+      for (val in params) {
+        assign(val, poly_seq)
+        vals[[val]] = get(val)
+      }
+      if (is.null(new_best$num.pars$shape)) {
+        new_best$num.pars$shape = 0
+      }
+      v = make.qcov(new_best, vals = vals)
     }
-    params = intersect(quad_par, names(new_best$results$par))
-    for (val in params) {
-      assign(val, poly_seq)
-      vals[[val]] = get(val)
-    }
-    if (is.null(new_best$num.pars$shape)) {
-      new_best$num.pars$shape = 0
-    }
-    v = make.qcov(new_best, vals = vals)
     for (j in 1:length(r_periods)) {
       rl = return.Level(new_best, v, 0.05, r_period[j])
       return_vals[[i]][[j]]
