@@ -1,154 +1,181 @@
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
-# Author: April Walker
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 library(tidyverse)
 library(extRemes)
 library(zoo)
 library(lubridate)
 
-file.Setup <- function(dir, durations, r_periods, season) {
-  #develop directories in case not already made
-  extra <- file.path(dir, "extra")
-  idf <- file.path(dir, "idf")
+# # # # # # # # # # #
+# # IDF : This function developes a IDF Curve for the daily observations of
+# # #     some data type by utilizing the GEV distribution family to develop
+# # #     expected non-stationary return levels over a given return period at
+# # #     various day-long durations. While this function will fill in missing
+# # #     data, it is suggested your data be mostly complete for optimal
+# # #     estimations.
+# # # # # # # # # # #
+# Inputs:
+#    data - This should be a list or dataframe with the first column containing
+#       the data as a POSIXct type or a character type in %Y-%m-%d
+#       format, and the second column containing the data to analyze.
+#    durations - This should be the a vector containing the various day-long
+#       durations you wish to use in your IDF. The default is c(1:7,10)
+#    r_periods - This should be a vector containing the return periods which
+#       you want to calculate the return level's (and IDF) for.
+#    season - This input should be a single word character string or integer
+#       containing one the four seasons you want to calculate the IDF for. If
+#       using an integer, the seasons begin with "winter".
+#    extreme - This refers to the type of extreme you are looking at, and should
+#       be a character string of either "min" or "max".
+#    forceGEV - If you wish to always have a shape paramter (ignore the
+#       potential of a Gumbel type) mark this as TRUE, else say FALSE.
+#    dir - A directory name (or path) in which to put the plots. ONLY enter a
+#       value if you wish for plots to be developed.
+#
+# Outputs:
+#
+# Author: April Walker
+# # # # # # # # # # #
+IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
+        season = 3, extreme = "max", forceGev = FALSE, dir = NULL) {
 
-  season_extra <- file.path(extra, season)
-  season_idf <- file.path(idf, season)
+  file.Setup <- function(dir, durations, r_periods, season) {
+    #develop directories in case not already made
+    extra <- file.path(dir, "extra")
+    idf <- file.path(dir, "idf")
 
-  trend <- file.path(season_extra, "trends")
-  rl <- file.path(season_extra, "return")
-  dir.create(dir)
-  dir.create(extra)
-  dir.create(idf)
-  dir.create(season_extra)
-  dir.create(season_idf)
-  dir.create(trend)
-  dir.create(rl)
-  trend_file = c()
-  rl_file = c()
-  idf_file = c()
-  for (i in 1:length(durations)) {
-    trend_file[i] = paste(trend, "trend-", durations[i], "day.jpeg")
-    rl_file[i] = paste(rl, "rlplot-", durations[i], "day.jpeg")
-    for (p in r_periods) {
-      idf_file[i] = paste(idf, "idf-", r_periods, "year-", durations[i],
-          "day.jpeg", sep = "")
-    }
-  }
-  return(list(rl=rl_file, idf=idf_file, trend=trend_file))
-}
+    season_extra <- file.path(extra, season)
+    season_idf <- file.path(idf, season)
 
-year.Range <- function(data) {
-  start <- format(as.Date(min(data$DATE)), format="%Y")
-  end <- format(as.Date(max(data$DATE)), format="%Y")
-  return(start:end)
-}
-
-season.Setup <- function(season) {
-  if ((season == 1) | (season == "winter")) {
-    start_day <- "2999-12-01"
-    end_day <- "2999-02-28"
-    season <- "winter"
-  } else if ((season == 2) | (season == "spring")) {
-    start_day <- "2999-03-01"
-    end_day <- "2999-05-31"
-    season <- "spring"
-  } else if ((season == 3) | (season == "summer")) {
-    start_day <- "2999-06-01"
-    end_day <- "2999-08-31"
-    season <- "summer"
-  } else if ((season = 4) | (season == "fall")) {
-    start_day <- "2999-09-01"
-    end_day <- "2999-11-30"
-    season <- "fall"
-  }
-  return(list(start=start_day, end=end_day, season=season))
-}
-
-duration.Setup <- function(duration, days) {
-    if (duration%%2 == 1) {
-      adj <- (duration-1)/2
-      dur_start <- format((as.Date(days$start) - adj), format="%m-%d")
-      dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
-    } else if (duration%%2 == 0) {
-      adj <- duration/2
-      dur_start <- format((as.Date(days$start) - adj + 1), format="%m-%d")
-      dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
-    }
-    return(list(start=dur_start, end=dur_end))
-}
-
-rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
-  extremes = c()
-  for (yr in years) {
-    # Grab the dataset for each year
-    if (days$start == "12-01") {
-      days$end <- "02-28"
-      if(leap_year(yr+1)) {
-        days$end <- "02-29"
+    trend <- file.path(season_extra, "trends")
+    rl <- file.path(season_extra, "return")
+    dir.create(dir)
+    dir.create(extra)
+    dir.create(idf)
+    dir.create(season_extra)
+    dir.create(season_idf)
+    dir.create(trend)
+    dir.create(rl)
+    trend_file = c()
+    rl_file = c()
+    idf_file = c()
+    for (i in 1:length(durations)) {
+      trend_file[i] = paste(trend, "trend-", durations[i], "day.jpeg")
+      rl_file[i] = paste(rl, "rlplot-", durations[i], "day.jpeg")
+      for (p in r_periods) {
+        idf_file[i] = paste(idf, "idf-", r_periods, "year-", durations[i],
+            "day.jpeg", sep = "")
       }
     }
-    dates <- seq(as.Date(paste(yr, days$start, sep="-")),
-        as.Date(paste(yr + 1, days$end, sep="-")), by = "day")
-    tmp <- subset(data, as.Date(DATE,format = "%m-%d-%Y") %in% dates)
-    # Double check for complete data
-    tmp <- tmp %>%
-        mutate(DATE = as.Date(DATE)) %>%
-        complete(DATE = dates) %>%
-        fill(DATA)
-    # Find rolling mean and add save max value for the year
-    tmp <- rollmean(tmp$DATA, duration, align = "center")
-    extremes <- tryCatch(rbind(extremes, cbind.data.frame(yr,
-        get(extreme)(tmp))), error = function(e) print("try-error"))
-    # if (class(extremes) == "character") {
-    #   extremes <- cbind.data.frame(yr, get(extreme)(tmp))
-    #   extremes$DATA <- as.double(extremes$DATA)
-    # }
+    return(list(rl=rl_file, idf=idf_file, trend=trend_file))
   }
-  names(extremes) <- c("YEAR", "DATA")
-  return(extremes)
-}
 
-estimate.GOF <- function(fits) {
-  AIC <- c()
-  MLE <- c()
-  for (j in 1:length(fits)) {
-    MLE <- append(MLE, fits[[j]]$results$value)
-    try({AIC <- append(AIC, as.double(summary(fits[[j]]$AIC)))})
-    print("sadasda")
+  year.Range <- function(data) {
+    start <- format(as.Date(min(data$DATE)), format="%Y")
+    end <- format(as.Date(max(data$DATE)), format="%Y")
+    return(start:end)
   }
-  if (length(AIC) != 0) {
-    best_fit = fits[[which.min(AIC) + 2]]
-  } else {
-    best_fit = fits[[which.min(MLE) + 2]]
+
+  season.Setup <- function(season) {
+    if ((season == 1) | (season == "winter")) {
+      start_day <- "2999-12-01"
+      end_day <- "2999-02-28"
+      season <- "winter"
+    } else if ((season == 2) | (season == "spring")) {
+      start_day <- "2999-03-01"
+      end_day <- "2999-05-31"
+      season <- "spring"
+    } else if ((season == 3) | (season == "summer")) {
+      start_day <- "2999-06-01"
+      end_day <- "2999-08-31"
+      season <- "summer"
+    } else if ((season = 4) | (season == "fall") | (season == "autumn")) {
+      start_day <- "2999-09-01"
+      end_day <- "2999-11-30"
+      season <- "fall"
+    }
+    return(list(start=start_day, end=end_day, season=season))
   }
-  return(best_fit)
-}
 
-return.Level <- function(fit, qcov, alpha, r_period) {
-  ci = ci(fit, alpha = alpha, return.period = r_period,
-      qcov = qcov)
-  x = year_range
-  y = ci[,2]
-  ci_l = ci[,1]
-  ci_u = ci[,3]
-  err = ci[,4]
-  return(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err = err)
-}
+  duration.Setup <- function(duration, days) {
+      if (duration%%2 == 1) {
+        adj <- (duration-1)/2
+        dur_start <- format((as.Date(days$start) - adj), format="%m-%d")
+        dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
+      } else if (duration%%2 == 0) {
+        adj <- duration/2
+        dur_start <- format((as.Date(days$start) - adj + 1), format="%m-%d")
+        dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
+      }
+      return(list(start=dur_start, end=dur_end))
+  }
 
+  rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
+    extremes = c()
+    for (yr in years) {
+      # Grab the dataset for each year
+      if (days$start == "12-01") {
+        days$end <- "02-28"
+        if(leap_year(yr+1)) {
+          days$end <- "02-29"
+        }
+      }
+      dates <- seq(as.Date(paste(yr, days$start, sep="-")),
+          as.Date(paste(yr + 1, days$end, sep="-")), by = "day")
+      tmp <- subset(data, as.Date(DATE,format = "%m-%d-%Y") %in% dates)
+      # Double check for complete data
+      tmp <- tmp %>%
+          mutate(DATE = as.Date(DATE)) %>%
+          complete(DATE = dates) %>%
+          fill(DATA)
+      # Find rolling mean and add save max value for the year
+      tmp <- rollmean(tmp$DATA, duration, align = "center")
+      extremes <- tryCatch(rbind(extremes, cbind.data.frame(yr,
+          get(extreme)(tmp))), error = function(e) print("try-error"))
+      # if (class(extremes) == "character") {
+      #   extremes <- cbind.data.frame(yr, get(extreme)(tmp))
+      #   extremes$DATA <- as.double(extremes$DATA)
+      # }
+    }
+    names(extremes) <- c("YEAR", "DATA")
+    return(extremes)
+  }
 
-# IDF takes in data, durations, and season. The data should contain a column of
-# dates in the first column (mm-dd-yyyy format) and a column of data in the
-# second column. The durations can be a vector of day lengths which you wish to
-# determine the rolling average for (in days). The r_periods should be the
-# years which you want to analyze the return value for. The season should be
-# "winter" "spring" "summer" or "fall" or a numerical value from 1:4
-# corresponding to a season in that order. The extreme should me "max" or "min".
-# The forceGev qualifier ignores the lines which lr test between Gumbel and GEV.
-# If you want plots developed, enter a directory name.
-IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = TRUE,
-    dir = NULL) {
+  estimate.GOF <- function(fits) {
+    # if fits only contains one fit
+    if(!is.null(fits$call)) {
+      best_fits = fits
+      return(best_fits)
+    }
+    # else determine the best fit
+    AIC <- c()
+    MLE <- c()
+    for (i in 1:length(fits)) {
+      tmp <- fits[[i]]
+      print(tmp)
+      MLE <- append(MLE, tmp$results$value)
+      try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
+    }
+    if (length(AIC) != 0) {
+      best_fit = fits[[which.min(AIC) + 2]]
+    } else {
+      best_fit = fits[[which.min(MLE) + 2]]
+    }
+    return(best_fit)
+  }
+
+  return.Level <- function(fit, qcov, alpha, r_period) {
+    ci = ci(fit, alpha = alpha, return.period = r_period,
+        qcov = qcov)
+    x = year_range
+    y = ci[,2]
+    ci_l = ci[,1]
+    ci_u = ci[,3]
+    err = ci[,4]
+    return(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err = err)
+  }
+
+  # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
+  # # # # # # # # # # # # # #### MAIN FUNCTION #### # # # # # # # # # # # # #
+  # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
+
   # Variable init and gen setup
   extremes <- list()
   fits <- list()
@@ -167,6 +194,7 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
   if ((season == 1) | season=="winter") {
     year_range = year_range[1:(length(year_range)-1)]
   }
+  data_years = year_range[length(year_range)] - year_range[1]
   # Duration setup and block maxima
   for (i in 1:length(durations)) {
     return_vals[[i]] = list()
@@ -205,28 +233,28 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
     # If p < 0.05 the data is considered nonstationary
     if (p < 0.05) {
       # Fits with location ~ year
-      fits[[i]][[j+1]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, location.fun =
-          ~ poly(((Year - start_year)/ data_years), 1, raw = TRUE), units = "deg F")
-      fits[[i]][[j+2]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, location.fun =
-          ~ poly(((Year - start_year)/ data_years), 2, raw = TRUE), units = "deg F")
+      fits[[i]][[j+1]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F")
+      fits[[i]][[j+2]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F")
       # fits with scale ~ year
-      fits[[i]][[j+3]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, scale.fun =
-          ~ poly(((Year - start_year)/ data_years), 1), units = "deg F")
-      fits[[i]][[j+4]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, scale.fun =
-          ~ poly(Year, 2), units = "deg F")
+      fits[[i]][[j+3]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, scale.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1), units = "deg F")
+      fits[[i]][[j+4]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, scale.fun =
+          ~ poly(YEAR, 2), units = "deg F")
       # Fits with location ~ year and scale ~ year
-      fits[[i]][[j+5]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, location.fun =
-          ~ poly(((Year - start_year)/ data_years), 1, raw = TRUE), scale.fun =
-          ~ poly(((Year - start_year)/ data_years), 1, raw = TRUE), units = "deg F")
-      fits[[i]][[j+6]] = fevd(val[[j]]$TMAX, val[[j]], type = type, location.fun =
-          ~ poly(((Year - start_year)/ data_years), 2, raw = TRUE), scale.fun =
-          ~ poly(((Year - start_year)/ data_years), 1, raw = TRUE), units = "deg F")
-      fits[[i]][[j+7]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, location.fun =
-          ~ poly(((Year - start_year)/ data_years), 2, raw = TRUE), scale.fun =
-          ~ poly(((Year - start_year)/ data_years), 2, raw = TRUE), units = "deg F")
-      fits[[i]][[j+8]] <- fevd(val[[j]]$TMAX, val[[j]], type = type, location.fun =
-          ~ poly(((Year - start_year)/ data_years), 1, raw = TRUE), scale.fun =
-          ~ poly(((Year - start_year)/ data_years), 2, raw = TRUE), units = "deg F")
+      fits[[i]][[j+5]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F")
+      fits[[i]][[j+6]] = fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F")
+      fits[[i]][[j+7]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F")
+      fits[[i]][[j+8]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F")
     }
     # Find best fit
     num_params = c()
@@ -237,7 +265,9 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
     for (j in min(num_params):max(num_params)) {
       index = which(num_params %in% j)
       if(!(length(index) == 0)) {
-          best_fits <- append(best_fits, estimate.GOF(fits[[i]][[index]]))
+          tmp <- fits[[i]][[index]]
+          return(tmp)
+          best_fits <- append(best_fits, estimate.GOF(tmp))
       }
     }
     new_best = best_fits[[1]]
@@ -283,9 +313,9 @@ IDF <- function(data, durations, r_periods, season, extreme = "max", forceGev = 
   return(return_vals)
 }
 
-# # # # # # # # #
-# MAIN FUNCTION #
-# # # # # # # # #
+# # # #
+# # Testing
+# # # #
 
 # declare data directory
 dir <- "Historical_daily_obs"
