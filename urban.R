@@ -165,10 +165,20 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     ci = ci(fit, alpha = alpha, return.period = r_period,
         qcov = qcov)
     x = year_range
-    y = ci[,2]
-    ci_l = ci[,1]
-    ci_u = ci[,3]
-    err = ci[,4]
+    for (val in ci) {
+      print(val)
+    }
+    if (is.null(dim(c))) {
+      y = ci[2]
+      ci_l = ci[1]
+      ci_u = ci[3]
+      err = (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha)
+    } else {
+      y = ci[,2]
+      ci_l = ci[,1]
+      ci_u = ci[,3]
+      err = ci[,4]
+    }
     return(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err = err)
   }
 
@@ -278,7 +288,6 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
         new_best = best_fits[[j+1]]
       }
     }
-    return(new_best)
     scaled_range = (year_range - year_range[1])/data_years
     threshold = seq()
     lin_par = c("mu1", "sigma1")
@@ -303,12 +312,12 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       v = make.qcov(new_best, vals = vals)
     }
     for (j in 1:length(r_periods)) {
-      rl = return.Level(new_best, v, 0.05, r_period[j])
+      rl = return.Level(new_best, v, 0.05, r_periods[j])
       return_vals[[i]][[j]]
       if (!is.null(dir)) {
         jpeg(file$idf, width=500, height=750)
         plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
-            main = paste(r_period[j], "-Year Return Levels for ", durations[i],
+            main = paste(r_periods[j], "-Year Return Levels for ", durations[i],
             " Day Events in ", dir, sep=""), type = "o")
         arrows(rl$x, rl$ci_l, rl$ci_u, length=0.05, andlge=90, code=3)
         dev.off()
@@ -324,6 +333,8 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
 # # # #
 
 # declare data directory
+options(error = function() traceback(2))
+
 dir <- "Historical_daily_obs"
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
 data_cols = c("YEAR", "MO", "DA", "TEMP", "PRCP", "MAX", "MIN")
@@ -348,5 +359,5 @@ durations = c(1,2,3,4,5,6,7,10)
 seasons = c(1,2,3,4)
 print("Begin analysis:")
 for(season in seasons) {
-  returns = IDF(test, durations, 2, season, extreme="max", forceGev = FALSE, dir = "SLC")
+  returns = IDF(test, durations, 2, season, "max", FALSE, "SLC")
 }
