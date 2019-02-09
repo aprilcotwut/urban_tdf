@@ -3,7 +3,7 @@ library(extRemes)
 library(zoo)
 library(lubridate)
 
-# # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # IDF : This function developes a IDF Curve for the daily observations of
 # # #     some data type by utilizing the GEV distribution family to develop
 # # #     expected non-stationary return levels over a given return period at
@@ -32,12 +32,14 @@ library(lubridate)
 # Outputs:
 #
 # Author: April Walker
-# # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
         season = 3, extreme = "max", forceGev = FALSE, dir = NULL) {
 
+  # This function develops the directories and filenames if the user chooses
+  # to plot the IDF findings
   file.Setup <- function(dir, durations, r_periods, season) {
-    #develop directories in case not already made
     extra <- file.path(dir, "extra")
     idf <- file.path(dir, "idf")
 
@@ -67,12 +69,15 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     return(list(rl=rl_file, idf=idf_file, trend=trend_file))
   }
 
+  # This function reads in the data and determines the year range
   year.Range <- function(data) {
     start <- format(as.Date(min(data$DATE)), format="%Y")
     end <- format(as.Date(max(data$DATE)), format="%Y")
     return(start:end)
   }
 
+  # This season determines the start and end day of the observation based on
+  # what season is indicated to be studied
   season.Setup <- function(season) {
     if ((season == 1) | (season == "winter")) {
       start_day <- "2999-12-01"
@@ -94,6 +99,9 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     return(list(start=start_day, end=end_day, season=season))
   }
 
+  # This devlops the start and end day for a particular duration, and assumes
+  # the rolling average is calculated to be centered around the period of
+  # interest
   duration.Setup <- function(duration, days) {
       if (duration%%2 == 1) {
         adj <- (duration-1)/2
@@ -107,6 +115,8 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       return(list(start=dur_start, end=dur_end))
   }
 
+  # This function determines the maximum or minimum value for each year in a
+  # dataset, then returns a new dataset with this information
   rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
     extremes = c()
     for (yr in years) {
@@ -138,6 +148,8 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     return(extremes)
   }
 
+  # Given a vector of fits, this functon detemines and returns the best fit
+  # based on AIC, or if unavaliable, MLE
   estimate.GOF <- function(fits) {
     # if fits only contains one fit
     if(!is.null(fits$call)) {
@@ -161,6 +173,9 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     return(best_fit)
   }
 
+  # Given either a stationary or nonstationary fevd object, a qcov, and a
+  # level of confidence (alpha) this function determines the return level and
+  # confidence level for a given return period
   return.Level <- function(fit, qcov, alpha, r_period) {
     ci = ci(fit, alpha = alpha, return.period = r_period,
         qcov = qcov)
