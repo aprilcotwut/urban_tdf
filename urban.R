@@ -164,39 +164,20 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       MLE <- append(MLE, tmp$results$value)
       try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
     }
-    if (length(AIC) != 0) {
-      best_fit = fits[[which.min(AIC) + 2]]
+    if (!is.na(sum(AIC))) {
+      best_fit = fits[[which.min(AIC)]]
     } else {
-      best_fit = fits[[which.min(MLE) + 2]]
+      best_fit = fits[[which.min(MLE)]]
     }
     return(best_fit)
-  }
-
-  # Given either a stationary or nonstationary fevd object, a qcov, and a
-  # level of confidence (alpha) this function determines the return level and
-  # confidence level for a given return period
-  return.Level <- function(fit, qcov, alpha, r_period) {
-    ci = ci(fit, alpha = alpha, return.period = r_period,
-        qcov = qcov)
-    x = year_range
-    if (is.null(dim(c))) {
-      y = rep(ci[2], length(x))
-      ci_l = rep(ci[1], length(x))
-      ci_u = rep(ci[3], length(x))
-      err = (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha))
-    } else {
-      y = ci[,2]
-      ci_l = ci[,1]
-      ci_u = ci[,3]
-      err = ci[,4]
-    }
-    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err=err))
   }
 
   # This function develops the qcov matrix for a given fit, nonstationary or
   # stationary
   qcov.Developer <- function(year_range, fit) {
     scaled_range = (year_range - year_range[1])/length(year_range)
+    lin_seq = scaled_range
+    poly_seq = scaled_range^2
     lin_par = c("mu1", "sigma1")
     quad_par = c("mu2", "sigma2")
     params = intersect(lin_par, names(fit$results$par))
@@ -219,6 +200,26 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       qcov = make.qcov(fit, vals = vals)
     }
     return(v = qcov)
+  }
+
+  # Given either a stationary or nonstationary fevd object, a qcov, and a
+  # level of confidence (alpha) this function determines the return level and
+  # confidence level for a given return period
+  return.Level <- function(fit, qcov, alpha, r_period, year_range) {
+    ci = ci(fit, alpha = alpha, return.period = r_period, qcov = qcov)
+    x = year_range
+    if (is.null(dim(c))) {
+      y = rep(ci[2], length(x))
+      ci_l = rep(ci[1], length(x))
+      ci_u = rep(ci[3], length(x))
+      err = (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha))
+    } else {
+      y = ci[,2]
+      ci_l = ci[,1]
+      ci_u = ci[,3]
+      err = ci[,4]
+    }
+    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err=err))
   }
 
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
@@ -332,8 +333,12 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       new_best = fevd(extremes[[i]]$DATA, extremes[[i]], type=type, units="deg F")
     }
     v = qcov.Developer(year_range, new_best)
+    tmp_ci = tryCatch(ci(new_best, qcov = v), error = function(e) print("try-error"))
+    if (class(tmp_ci) == "character") {
+      return(new_best)
+    }
     for (j in 1:length(r_periods)) {
-      rl = return.Level(new_best, v, 0.05, r_periods[j])
+      rl = return.Level(new_best, v, 0.05, r_periods[j], year_range)
       if (!is.null(dir)) {
         jpeg(file$idf, width=500, height=750)
         plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
