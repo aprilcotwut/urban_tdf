@@ -161,7 +161,6 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     MLE <- c()
     for (i in 1:length(fits)) {
       tmp <- fits[[i]]
-      print(tmp)
       MLE <- append(MLE, tmp$results$value)
       try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
     }
@@ -180,21 +179,46 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     ci = ci(fit, alpha = alpha, return.period = r_period,
         qcov = qcov)
     x = year_range
-    for (val in ci) {
-      print(val)
-    }
     if (is.null(dim(c))) {
-      y = ci[2]
-      ci_l = ci[1]
-      ci_u = ci[3]
-      err = (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha)
+      y = rep(ci[2], length(x))
+      ci_l = rep(ci[1], length(x))
+      ci_u = rep(ci[3], length(x))
+      err = (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha))
     } else {
       y = ci[,2]
       ci_l = ci[,1]
       ci_u = ci[,3]
       err = ci[,4]
     }
-    return(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err = err)
+    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err=err))
+  }
+
+  # This function develops the qcov matrix for a given fit, nonstationary or
+  # stationary
+  qcov.Developer <- function(year_range, fit) {
+    scaled_range = (year_range - year_range[1])/length(year_range)
+    lin_par = c("mu1", "sigma1")
+    quad_par = c("mu2", "sigma2")
+    params = intersect(lin_par, names(fit$results$par))
+    if (is_empty(params)) {
+      qcov = make.qcov(fit)
+    } else {
+      vals = list()
+      for (val in params) {
+        assign(val, lin_seq)
+        vals[[val]] = get(val)
+      }
+      params = intersect(quad_par, names(fit$results$par))
+      for (val in params) {
+        assign(val, poly_seq)
+        vals[[val]] = get(val)
+      }
+      if (is.null(fit$num.pars$shape)) {
+        fit$num.pars$shape = 0
+      }
+      qcov = make.qcov(fit, vals = vals)
+    }
+    return(v = qcov)
   }
 
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
@@ -219,7 +243,6 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
   if ((season == 1) | season=="winter") {
     year_range = year_range[1:(length(year_range)-1)]
   }
-  data_years = length(year_range)
   # Duration setup and block maxima
   for (i in 1:length(durations)) {
     return_vals[[i]] = list()
@@ -255,6 +278,7 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       type <- "GEV"
       GEV_type <- "NA"
     }
+    data_years = length(year_range)
     # If p < 0.05 the data is considered nonstationary
     if (p < 0.05) {
       # Fits with location ~ year
@@ -280,61 +304,42 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       fits[[i]][[j+8]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F")
-    }
-    # Find best fit
-    num_params = c()
-    best_fits = list()
-    for (j in 1:length(fits[[i]])) {
-      num_params[j] = length(fits[[i]][[j]]$results$par)
-    }
-    k = 1
-    for (j in min(num_params):max(num_params)) {
-      index = which(num_params %in% j)
-      if(!(length(index) == 0)) {
-          tmp <- fits[[i]][[index]]
-          best_fits[[k]] <- estimate.GOF(tmp)
-          k = k + 1
+
+      names(fits[[i]]) = seq(1, length(fits[[i]]))
+      # Find best fit
+      num_params = c()
+      best_fits = list()
+      for (j in 1:length(fits[[i]])) {
+        num_params[j] = length(fits[[i]][[j]]$results$par)
       }
-    }
-    new_best = best_fits[[1]]
-    for (j in 2:length(best_fits)) {
-      lr = lr.test(new_best, best_fits[[j]])
-      if (lr$p.value < 0.05) {
-        new_best = best_fits[[j+1]]
+      k = 1
+      for (j in min(num_params):max(num_params)) {
+        index = which(num_params %in% j)
+        if(!(length(index) == 0)) {
+            tmp <- subset(fits[[i]], names(fits[[i]]) %in% index)
+            best_fits[[k]] <- estimate.GOF(tmp)
+            k = k + 1
+        }
       }
-    }
-    scaled_range = (year_range - year_range[1])/data_years
-    threshold = seq()
-    lin_par = c("mu1", "sigma1")
-    quad_par = c("mu2", "sigma2")
-    params = intersect(lin_par, names(new_best$results$par))
-    if (is_empty(params)) {
-      v = make.qcov(new_best)
+      new_best = best_fits[[1]]
+      for (j in 2:length(best_fits)) {
+        lr = lr.test(new_best, best_fits[[j]])
+        if (lr$p.value < 0.05) {
+          new_best = best_fits[[j]]
+        }
+      }
     } else {
-      vals = list()
-      for (val in params) {
-        assign(val, lin_seq)
-        vals[[val]] = get(val)
-      }
-      params = intersect(quad_par, names(new_best$results$par))
-      for (val in params) {
-        assign(val, poly_seq)
-        vals[[val]] = get(val)
-      }
-      if (is.null(new_best$num.pars$shape)) {
-        new_best$num.pars$shape = 0
-      }
-      v = make.qcov(new_best, vals = vals)
+      new_best = fevd(extremes[[i]]$DATA, extremes[[i]], type=type, units="deg F")
     }
+    v = qcov.Developer(year_range, new_best)
     for (j in 1:length(r_periods)) {
       rl = return.Level(new_best, v, 0.05, r_periods[j])
-      return_vals[[i]][[j]]
       if (!is.null(dir)) {
         jpeg(file$idf, width=500, height=750)
         plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
             main = paste(r_periods[j], "-Year Return Levels for ", durations[i],
             " Day Events in ", dir, sep=""), type = "o")
-        arrows(rl$x, rl$ci_l, rl$ci_u, length=0.05, andlge=90, code=3)
+        arrows(rl$x, rl$ci_l, rl$ci_u, length=0.05, angle=90, code=3)
         dev.off()
       }
       return_vals[[i]][[j]] <- rl
