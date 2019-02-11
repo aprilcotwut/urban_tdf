@@ -422,8 +422,13 @@ print("Begin analysis:")
 for (val in data_cols) {
   for(city in cities) {
     for (season in seasons) {
-    dir.create(city)
-    dir <- file.path(city, val)
+    #Make some directories
+    dir <- "Output"
+    dir.create(dir)
+    dir <- file.path(dir, city)
+    dir.create(dir)
+    dir <- file.path(dir, val)
+    #Data prep
     cols <- c(date_cols, val)
     test <- select(data[[city]], cols)
     test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
