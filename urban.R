@@ -209,7 +209,8 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
   return.Level <- function(fit, qcov, alpha, r_period, year_range, warning) {
     ci <- ci(fit, alpha = alpha, return.period = r_period, qcov = qcov)
     x <- year_range
-    if (is.null(dim(c))) {
+    if (is.null(dim(ci))) {
+
       y <- rep(ci[2], length(x))
       ci_l <- rep(ci[1], length(x))
       ci_u <- rep(ci[3], length(x))
@@ -220,7 +221,12 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       ci_u <- ci[,3]
       err <- ci[,4]
     }
-    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err=err))
+    if (mean(err) < 1e-4) {
+      warning = TRUE
+    } else {
+      warning = FALSE
+    }
+    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err=err, warn=warning, fit=fit))
   }
 
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
@@ -231,6 +237,7 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
   extremes <- list()
   fits <- list()
   return_vals <- list()
+  warn_fits <- list()
 
   # Data fixes and generalizations
   names(data) <- c("DATE", "DATA")
@@ -255,6 +262,27 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     mk <- cor.test(extremes[[i]]$YEAR, extremes[[i]]$DATA, method="kendall")
     tau <- as.double(mk$estimate)
     p <- mk$p.value
+    if(!is.null(dir)) {
+      jpeg(file$trend[i])
+      max_locs = order(extremes[[i]]$DATA, decreasing=TRUE)[1:3]
+      max_data = extremes[[i]][max_locs, 2]
+      plot(extremes[[i]]$YEAR, extremes[[i]]$DATA,
+        col=ifelse(extremes[[i]]$DATA == max_data[1] | extremes[[i]]$DATA == max_data[2],
+            "red", "black"),
+        pch=ifelse(extremes[[i]]$DATA == max_data[1] | extremes[[i]]$DATA == max_data[2],
+            19, 1))
+      trend = lm(extremes[[i]]$DATA ~ extremes[[i]]$YEAR)
+      intercept = signif(coef(trend)[1], 4)
+      slope = signif(coef(trend)[2], 4)
+      eq = paste("DATA =", slope, "YEAR +", intercept)
+      abline(trend, col="#e66101")
+      mtext(eq, 3, line=-2)
+
+      trend = lm(extremes[[i]]$DATA ~ poly(extremes[[i]]$YEAR, 2, raw = TRUE))
+      predicted = predict(trend, data.frame(x=extremes[[i]]$YEAR), interval='confidence', level=0.95)
+      lines(extremes[[i]]$YEAR, predicted[,1], col="#5e3c99")
+      dev.off()
+    }
     # Begin fitting to models
     fits[[i]] <- list()
     j <- 1
@@ -291,8 +319,8 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       # fits with scale ~ year
       fits[[i]][[j+3]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, scale.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 1), units = "deg F", use.phi = TRUE)
-      fits[[i]][[j+4]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, scale.fun =
-          ~ poly(YEAR, 2), units = "deg F", use.phi = TRUE)
+      # fits[[i]][[j+4]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, scale.fun =
+      #     ~ poly(YEAR, 2), units = "deg F", use.phi = TRUE)
       # Fits with location ~ year and scale ~ year
       fits[[i]][[j+5]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
@@ -302,14 +330,14 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
           ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F",
           use.phi = TRUE)
-      fits[[i]][[j+7]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F",
-          use.phi = TRUE)
-      fits[[i]][[j+8]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F",
-          use.phi = TRUE)
+      # fits[[i]][[j+7]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+      #     ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
+      #     ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F",
+      #     use.phi = TRUE)
+      # fits[[i]][[j+8]] <- fevd(extremes[[i]]$DATA, extremes[[i]], type = type, location.fun =
+      #     ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
+      #     ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F",
+      #     use.phi = TRUE)
 
       names(fits[[i]]) <- seq(1, length(fits[[i]]))
       # Find best fit
@@ -330,7 +358,6 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       new_best <- best_fits[[1]]
       for (j in 2:length(best_fits)) {
         lr <- lr.test(new_best, best_fits[[j]])
-        print(lr$p.value)
         if (lr$p.value < 0.05) {
           new_best <- best_fits[[j]]
         }
@@ -339,20 +366,22 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       new_best <- fevd(extremes[[i]]$DATA, extremes[[i]], type=type, units="deg F")
     }
     v <- qcov.Developer(year_range, new_best)
-    warning <- tryCatch(ci(new_best, qcov = v), error = function(e) print("try-error"))
-    if (length(warning) == 1) {
-      warning = TRUE
-    } else {
-      warning = FALSE
-    }
     for (j in 1:length(r_periods)) {
       rl <- return.Level(new_best, v, 0.05, r_periods[j], year_range, warning)
       if (!is.null(dir)) {
         jpeg(file$idf[(i - 1)*length(r_periods) + j], width=500, height=750)
-        plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
+        result = tryCatch(plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
             main = paste(r_periods[j], "-Year Return Levels for ", durations[i],
-            " Day Events in ", dir, sep=""), type = "o")
-        arrows(rl$x, rl$ci_l, rl$ci_u, length=0.05, angle=90, code=3)
+            " Day Events in ", dir, sep=""), type = "o"), error = function(e) print("try-error"))
+        if(class(result) == "character") {
+          print(v)
+          print(new_best)
+          print(extremes[[i]])
+          print(rl$x)
+          print(rl$y)
+        }
+
+        arrows(rl$x, rl$ci_l, rl$x, rl$ci_u, length=0.05, angle=90, code=3)
         dev.off()
       }
       return_vals[[i]][[j]] <- rl
@@ -370,7 +399,9 @@ options(error = function() traceback(2))
 
 dir <- "Historical_daily_obs"
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
-data_cols <- c("YEAR", "MO", "DA", "TEMP", "PRCP", "MAX", "MIN")
+date_cols <- c("YEAR", "MO", "DA")
+data_cols <- c("TEMP", "PRCP", "MAX", "MIN")
+all_cols = c(date_cols, data_cols)
 
 # declare dataset with header based on cities in dataset
 files <- system(sys_call, intern = TRUE)
@@ -381,16 +412,23 @@ names(data) <- cities
 for (i in 1:length(files)) {
   path <- file.path(dir, files[i])
   data[[cities[i]]] <- read.csv(path, header = TRUE)
-  data[[cities[i]]] <- select(data[[cities[i]]], one_of(data_cols))
+  data[[cities[i]]] <- select(data[[cities[i]]], one_of(all_cols))
 }
-
-test <- select(data$SLC, c("YEAR", "MO", "DA", "TEMP"))
-test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
-test$DATE <- as.POSIXct(test$DATE)
 
 durations <- c(1,2,3,4,5,6,7,10)
 seasons <- c(1,2,3,4)
+
 print("Begin analysis:")
-for(season in seasons) {
-  returns <- IDF(test, durations, c(2, 20, 100), season, "max", TRUE, "SLC")
+for (val in data_cols) {
+  for(city in cities) {
+    for (season in seasons) {
+    dir.create(city)
+    dir <- file.path(city, val)
+    cols <- c(date_cols, val)
+    test <- select(data[[city]], cols)
+    test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
+    test$DATE <- as.POSIXct(test$DATE)
+    returns <- IDF(test, durations, c(2, 20, 100), season, "max", TRUE, dir)
+    }
+  }
 }
