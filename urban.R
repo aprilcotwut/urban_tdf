@@ -456,7 +456,7 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
 # declare data directory
 options(error = function() traceback(2))
 
-dir <- "Historical_daily_obs"
+dir <- "Data"
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
 date_cols <- c("YEAR", "MO", "DA")
 data_cols <- c("TEMP", "PRCP", "MAX", "MIN")
