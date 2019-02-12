@@ -122,7 +122,7 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
   # This function determines the maximum or minimum value for each year in a
   # dataset, then returns a new dataset with this information
   rolling.BlockMaxima <- function(years, days, duration, data, extreme="max") {
-    extremes = c()
+    df = c()
     for (yr in years) {
       # Grab the dataset for each year
       if ((days$start) <= "12-01" && (days$start) > "09-01") {
@@ -144,23 +144,30 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
           fill(DATA)
       # Find rolling mean and add save max value for the year
       tmp <- rollmean(tmp$DATA, duration, align = "center")
-      extremes <- tryCatch(rbind(extremes, cbind.data.frame(yr,
-          get(extreme)(tmp))), error = function(e) print("try-error"))
-      # if (class(extremes) == "character") {
-      #   extremes <- cbind.data.frame(yr, get(extreme)(tmp))
-      #   extremes$DATA <- as.double(extremes$DATA)
+      df <- tryCatch(rbind(df, cbind.data.frame(yr,
+          get(extreme)(tmp))), error = function(e) print("Roll Mean Error"))
+      # if (class(df) == "character") {
+      #   df <- cbind.data.frame(yr, get(extreme)(tmp))
+      #   df$DATA <- as.double(df$DATA)
       # }
     }
-    names(extremes) <- c("YEAR", "DATA")
-    return(extremes)
+    names(df) <- c("YEAR", "DATA")
+    return(df)
   }
 
-  make.Fits <- function(extremes, forceGEV, forceType, p, year_range) {
+  # make.Fits takes in information from the IDF function to develop fevd fits
+  # for the dataset
+  make.Fits <- function(df, forceGEV, forceType, p, year_range, polyfits) {
     j <- 1
     if ((!forceGEV) && is.null(forceType)) {
       j <- 2
-      fits[[1]] <- fevd(extremes$DATA, extremes, type="Gumbel", units="deg F")
-      fits[[2]] <- fevd(extremes$DATA, extremes, type="GEV", units="deg F")
+      tryCatch(fits[[1]] <- fevd(df$DATA, df, type="Gumbel",
+          units="deg F"), error = function(e) print("FEVD Dev Error"))
+      if (class(fits[1]) == "character") {
+        warn_data[w] <<- df
+        w <<- w + 1
+      }
+      fits[[2]] <- fevd(df$DATA, df, type="GEV", units="deg F")
       lr = lr.test(fits[[1]], fits[[2]])
       if (lr$p.value < 0.05) {
         type <- "GEV"
@@ -175,50 +182,45 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
         GEV_type <- "Gumbel"
       }
     } else if (forceGEV) {
-      fits[[1]] <- fevd(extremes$DATA, extremes, type="GEV", units="deg F")
+      fits[[1]] <- fevd(df$DATA, df, type="GEV", units="deg F")
       type <- "GEV"
       GEV_type <- "NA"
     } else {
       type <- forceType
-      fits[[1]] <- fevd(extremes$DATA, extremes, type=forceType, units="deg F")
+      fits[[1]] <- fevd(df$DATA, df, type=forceType, units="deg F")
     }
     data_years <- length(year_range)
     # If p < 0.05 the data is considered nonstationary
     if (p < 0.05) {
       ### Fits with location ~ year or ~year^2 ###
-      fits[[j+1]] <- fevd(extremes$DATA, extremes, type = type, location.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F")
-      fits[[j+2]] <- fevd(extremes$DATA, extremes, type = type, location.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F")
+      fits[[j+1]] <- fevd(df$DATA, df, type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE))
+      fits[[j+2]] <- fevd(df$DATA, df, type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE))
 
       ### Fits with scale ~ year ###
-      fits[[j+3]] <- fevd(extremes$DATA, extremes, type = type, scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 1), units = "deg F", use.phi = TRUE)
+      fits[[j+3]] <- fevd(df$DATA, df, type = type, scale.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1), use.phi = TRUE)
 
       ### Fits with location ~ year and scale ~ year ###
-      fits[[j+4]] <- fevd(extremes$DATA, extremes, type = type, location.fun =
+      fits[[j+4]] <- fevd(df$DATA, df, type = type, location.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F",
-          use.phi = TRUE)
-      fits[[j+5]] <- fevd(extremes$DATA, extremes, type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), use.phi = TRUE)
+      fits[[j+5]] <- fevd(df$DATA, df, type = type, location.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), units = "deg F",
-          use.phi = TRUE)
+          ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), use.phi = TRUE)
       if (poly_scale) {
         ### Fits with scale ~ year^2 ###
-        fits[[j+6]] <- fevd(extremes$DATA, extremes, type = type, scale.fun =
-            ~ poly(YEAR, 2), units = "deg F", use.phi = TRUE)
-      fits[[j+7]] <- fevd(extremes$DATA, extremes, type = type, location.fun =
+        fits[[j+6]] <- fevd(df$DATA, df, type = type, scale.fun =
+            ~ poly(YEAR, 2), use.phi = TRUE)
+      fits[[j+7]] <- fevd(df$DATA, df, type = type, location.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F",
-          use.phi = TRUE)
-      fits[[j+8]] <- fevd(extremes$DATA, extremes, type = type, location.fun =
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), use.phi = TRUE)
+      fits[[j+8]] <- fevd(df$DATA, df, type = type, location.fun =
           ~ poly(((YEAR - year_range[1])/ data_years), 1, raw = TRUE), scale.fun =
-          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), units = "deg F",
-          use.phi = TRUE)
+          ~ poly(((YEAR - year_range[1])/ data_years), 2, raw = TRUE), use.phi = TRUE)
       }
     }
-    names(fits) <- seq(1, length(fits))
     return(list(fits=fits, type=type))
   }
 
@@ -235,15 +237,23 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     MLE <- c()
     for (i in 1:length(fits)) {
       tmp <- fits[[i]]
-      MLE <- append(MLE, tmp$results$value)
-      try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
-    }
-    if (!is.na(sum(AIC))) {
-      best_fit <- fits[[which.min(AIC)]]
-    } else {
-      best_fit <- fits[[which.min(MLE)]]
-    }
+      if ((length(tmp) > 1) && is.null(tmp$results$value)) {
+        best_fit <- estimate.GOF(tmp)
+        return(best_fit)
+      } else {
+        MLE <- append(MLE, tmp$results$value)
+        try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
+      }
+      if (!is.na(sum(AIC))) {
+        best_fit <- fits[[which.min(AIC)]]
+      } else {
+        if(is.null(MLE)) {
+          print(fits)
+        }
+        best_fit <- fits[[which.min(MLE)]]
+      }
     return(best_fit)
+    }
   }
 
   best.Fit <- function(fits) {
@@ -256,7 +266,10 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     for (j in min(num_params):max(num_params)) {
       index <- which(num_params %in% j)
       if(!(length(index) == 0)) {
+          names(fits) <- seq(1, length(fits))
           tmp <- subset(fits, names(fits) %in% index)
+          names(fits) <- NULL
+          names(tmp) <- NULL
           best_fits[[k]] <- estimate.GOF(tmp)
           k <- k + 1
       }
@@ -304,22 +317,29 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
   # Given either a stationary or nonstationary fevd object, a qcov, and a
   # level of confidence (alpha) this function determines the return level and
   # confidence level for a given return period
-  return.Level <- function(extremes, fit, qcov, alpha, r_period, year_range, p) {
+  return.Level <- function(df, fit, qcov, alpha, r_period, year_range, p) {
     ci <- tryCatch(ci(fit, alpha = alpha, return.period = r_period, qcov = qcov),
-        error = function(e) print("try-error"))
+        error = function(e) print("CI Calc Error"))
     if(class(ci) == "character") {
-      print(extremes)
       if(fit$type == "GEV") {
-        fits = make.Fits(extremes, forceGEV=FALSE, "Gumbel", p, year_range)$fits
+        type = "Gumbel"
+        fits = make.Fits(df, forceGEV=FALSE, type, p, year_range)$fits
       } else {
-        fits = make.Fits(extremes, forceGEV=TRUE, NULL, p, year_range)$fits
+        type = "GEV"
+        fits = make.Fits(df, forceGEV=TRUE, NULL, p, year_range)$fits
       }
-      new_best = best.Fit(fits)
-      v <- qcov.Developer(year_range, new_best)
+      if(p < 0.05) {
+        new_best = best.Fit(fits)
+        v <- qcov.Developer(year_range, new_best)
+      } else {
+        new_best = fevd(df$DATA, df, type=type, units="deg F")
+      }
       ci <- tryCatch(ci(fit, alpha = alpha, return.period = r_period, qcov = qcov),
-          error = function(e) print("try-error"))
+          error = function(e) print("Retry CI Calc Error"))
       if(class(ci) == "character") {
-        return(x=0,y=0, ci_l=0,ci_u=0, err=err, warn=TRUE, fit=new_best)
+        print(df)
+        return(list(x=0, y=0, ci_l=0, ci_u=0, err=0, warn=TRUE, fit=new_best))
+      }
     }
     x <- year_range
     if (is.null(dim(ci))) {
@@ -413,15 +433,10 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
         jpeg(file$idf[(i - 1)*length(r_periods) + j], width=500, height=750)
         result = tryCatch(plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
             main = paste(r_periods[j], "-Year Return Levels for ", durations[i],
-            " Day Events in ", dir, sep=""), type = "o"), error = function(e) print("try-error"))
-        if(class(result) == "character") {
-          print(v)
-          print(new_best)
+            " Day Events in ", dir, sep=""), type = "o"), error = function(e) print("Plot (IDF) Error"))
+        if(class(result) == "character" || rl$warn) {
           warn_fits[[w]] <<- new_best
-          print(extremes[[i]])
           warn_data[[w]] <<- extremes[[i]]
-          print(rl$x)
-          print(rl$y)
           w <<- w + 1
         }
 
@@ -477,7 +492,11 @@ for (val in data_cols) {
     test <- select(data[[city]], cols)
     test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
     test$DATE <- as.POSIXct(test$DATE)
-    returns <- IDF(test, durations, c(2, 20, 100), season, "max", FALSE, dir, FALSE)
+    returns <- tryCatch(IDF(test, durations, c(2, 20, 100), season, "max", FALSE,
+        dir, FALSE), error = function(e) print("IDF Function Error"))
+    if(class(returns) == "character") {
+      print(head(test))
+    }
     }
   }
 }
