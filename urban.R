@@ -321,7 +321,6 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
     ci <- tryCatch(ci(fit, alpha = alpha, return.period = r_period, qcov = qcov),
         error = function(e) print("CI Calc Error"))
     if(class(ci) == "character") {
-      print(df)
       if(fit$type == "GEV") {
         type = "Gumbel"
         fits = make.Fits(df, forceGEV=FALSE, type, p, year_range)$fits
@@ -338,6 +337,7 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
       ci <- tryCatch(ci(fit, alpha = alpha, return.period = r_period, qcov = qcov),
           error = function(e) print("Retry CI Calc Error"))
       if(class(ci) == "character") {
+        print(df)
         return(list(x=0, y=0, ci_l=0, ci_u=0, err=0, warn=TRUE, fit=new_best))
       }
     }
@@ -434,10 +434,9 @@ IDF <- function(data, durations=c(1:7,10), r_periods=c(2, 20, 100),
         result = tryCatch(plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)), ylab="DATA", xlab="YEAR",
             main = paste(r_periods[j], "-Year Return Levels for ", durations[i],
             " Day Events in ", dir, sep=""), type = "o"), error = function(e) print("Plot (IDF) Error"))
-        if(class(result) == "character") {
+        if(class(result) == "character" || rl$warn) {
           warn_fits[[w]] <<- new_best
           warn_data[[w]] <<- extremes[[i]]
-          print(rl$x)
           w <<- w + 1
         }
 
@@ -495,6 +494,9 @@ for (val in data_cols) {
     test$DATE <- as.POSIXct(test$DATE)
     returns <- tryCatch(IDF(test, durations, c(2, 20, 100), season, "max", FALSE,
         dir, FALSE), error = function(e) print("IDF Function Error"))
+    if(class(returns) == "character") {
+      print(head(test))
+    }
     }
   }
 }
