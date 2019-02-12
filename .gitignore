@@ -1,5 +1,5 @@
-# Ignore all my plots
-Output/
+# Uncomment to ignore all my plots
+# Output/
 
 # Ignore my datasets
 Data/

@@ -478,9 +478,11 @@ durations <- c(1,2,3,4,5,6,7,10)
 seasons <- c(1,2,3,4)
 
 print("Begin analysis:")
-for (val in data_cols) {
-  for(city in cities) {
-    for (season in seasons) {
+
+# For now let's just focus on temp
+val = "TEMP"
+for(city in cities) {
+  for (season in seasons) {
     #Make some directories
     dir <- "Output"
     dir.create(dir)
@@ -496,7 +498,6 @@ for (val in data_cols) {
         dir, FALSE), error = function(e) print("IDF Function Error"))
     if(class(returns) == "character") {
       print(head(test))
-    }
     }
   }
 }
