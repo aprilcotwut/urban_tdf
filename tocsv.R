@@ -3,7 +3,7 @@
 # # # # # # # # # # # # #
 library(rio)
 
-dir <- "Historical_daily_obs"
+dir <- "Data"
 sys_call <- paste("ls", dir, "| grep .xlsx", sep = " ")
 
 files <- system(sys_call, intern = TRUE)
