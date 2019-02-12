@@ -1,2 +1,4 @@
 # Ignore all my plots
 Output/
+# Ignore my datasets
+Historical_daily_obs/
