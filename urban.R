@@ -144,6 +144,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # dataset, then returns a new dataset with this information
   rolling.BlockMaxima <- function(years, days, duration) {
     block_max = c()
+    log <- file.Setup()$info
     for (yr in years) {
       # Grab the dataset for each year
       if ((days$start) <= "12-01" && (days$start) > "09-01") {
@@ -161,13 +162,59 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       # Double check for complete data
       tmp <- tmp %>%
           mutate(DATE = as.Date(DATE)) %>%
-          complete(DATE = dates) %>%
-          fill(DATA)
+          complete(DATE = dates)
+      # If the dataset is mostly complete, replace the empties with the mean
+      if (mean(is.na(tmp$DATA)) > 0) {
+        sink(log, append = TRUE)
+        print(paste("NA data years for duration ", duration, ":", sep=""))
+        print(paste(mean(is.na(tmp$DATA)), "% NA in ", yr), sep = "")
+        sink()
+        if (mean(is.na(tmp$DATA)) < 0.5) {
+        tmp <- tmp %>%
+            replace_na(DATA = mean(tmp$DATA, na.rm=TRUE))
+        }
+      }
+      # Else wait till end to take average of previous and following year
+
       # Find rolling mean and add save max value for the year
       tmp <- rollmean(tmp$DATA, duration, align = "center")
       block_max <- rbind(block_max, cbind.data.frame(yr, get(extreme)(tmp)))
     }
     names(block_max) <- c("YEAR", "DATA")
+    # Handle missing values
+    NAs <- which(is.na(block_max$DATA))
+    if (length(NAs) == 0) {
+      return(block_max)
+    } else {
+      # Note the NA location
+    }
+    # Predict values
+    if (mean(is.na(block_max$DATA)) > 0.70) {
+      sink(log, append = TRUE)
+      print("LOCATION EXCLUDED FROM STUDY")
+      print(block_max$YEAR[NAs])
+      sink()
+      block_max <- NULL
+      return(block_max)
+    }
+    lm <- lm(block_max$DATA ~ block_max$YEAR, na.action = na.omit)
+    # And then fill
+    if (is.na(block_max$YEAR[1])) {
+      block_max <- subset(block_max, YEAR != years[1])
+    }
+    if (is.na(block_max$YEAR[length(years)])) {
+        block_max <- subset(block_max, YEAR != years[length(years)])
+    }
+    NAs <- which(is.na(block_max$DATA))
+    if (length(NAs) == 0) {
+      return(block_max)
+    }
+    new <- data.frame(YEAR = block_max$YEAR)
+    prediction <- predict(lm, newdata = new, interval = "confidence", level = .9)
+    for (val in NAs) {
+      r_pred <- runif(1, prediction[val,1], prediction[val,3])
+      block_max$DATA[val] <- r_pred
+    }
     return(block_max)
   }
 
@@ -521,6 +568,9 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # Determine the yearly maximum's trend
   block_max <- rolling.BlockMaxima(year.Range(season.Setup()),
       duration.Setup(1, season.Setup()), 1)
+  if (is.null(block_max)) {
+    return(NULL)
+  }
   p_abs <- cor.test(block_max$YEAR, block_max$DATA, method = "kendall")$p.value
 
   cat(paste("Yearly Seasonal Extreme Year/Value Correlation P_val:", signif(p_abs, 4),
@@ -537,6 +587,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     # Apply rolling mean block maxima
     extremes[[i]] <- rolling.BlockMaxima(year.Range(season.Setup()), dur_init,
         durations[i])
+
     # Plot trends (as given by Mann Kendall Test, lm(), and a prediction of the
     # quadratic fit)
     if(!is.null(dir)) {
@@ -688,10 +739,10 @@ for(city in cities) {
       directory <- file.path(directory, val)
       dir.create(directory)
       #Data prep
-      print(data[[city]][[loc]])
       cols <- c("DATE", val)
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
+      print(head(test))
       returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
   }
 }

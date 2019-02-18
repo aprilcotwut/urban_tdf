@@ -1,0 +1,167 @@
+[1] "NA data years for duration 1:"
+[1] "0.0108695652173913 % NA in  1992"
+[1] "NA data years for duration 1:"
+[1] "0.0108695652173913 % NA in  2004"
+[1] "NA data years for duration 1:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 1:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 1:"
+[1] "1 % NA in  2010"
+Yearly Seasonal Extreme Year/Value Correlation P_val: 0.007378 
+[1] "NA data years for duration 1:"
+[1] "0.0108695652173913 % NA in  1992"
+[1] "NA data years for duration 1:"
+[1] "0.0108695652173913 % NA in  2004"
+[1] "NA data years for duration 1:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 1:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 1:"
+[1] "1 % NA in  2010"
+DIC vals for duration 1 :
+[1] 506.5617
+[1] 507.1621
+[1] 491.3504
+[1] 483.3262
+[1] 495.6268
+[1] 488.5833
+[1] "NA data years for duration 2:"
+[1] "0.010752688172043 % NA in  1992"
+[1] "NA data years for duration 2:"
+[1] "0.010752688172043 % NA in  2004"
+[1] "NA data years for duration 2:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 2:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 2:"
+[1] "1 % NA in  2010"
+DIC vals for duration 2 :
+[1] 502.0185
+[1] 486.9733
+[1] 488.7424
+[1] 496.6013
+[1] 486.5199
+[1] 503.0407
+[1] "NA data years for duration 3:"
+[1] "0.0106382978723404 % NA in  1992"
+[1] "NA data years for duration 3:"
+[1] "0.0106382978723404 % NA in  1998"
+[1] "NA data years for duration 3:"
+[1] "0.0106382978723404 % NA in  2004"
+[1] "NA data years for duration 3:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 3:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 3:"
+[1] "1 % NA in  2010"
+DIC vals for duration 3 :
+[1] 498.1903
+[1] 487.6975
+[1] 481.5985
+[1] 490.6544
+[1] 480.7099
+[1] 503.3822
+[1] "NA data years for duration 4:"
+[1] "0.0105263157894737 % NA in  1992"
+[1] "NA data years for duration 4:"
+[1] "0.0105263157894737 % NA in  1998"
+[1] "NA data years for duration 4:"
+[1] "0.0105263157894737 % NA in  2004"
+[1] "NA data years for duration 4:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 4:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 4:"
+[1] "1 % NA in  2010"
+DIC vals for duration 4 :
+[1] 504.4588
+[1] 501.802
+[1] 479.8873
+[1] 490.5064
+[1] 494.942
+[1] 503.4658
+[1] "NA data years for duration 5:"
+[1] "0.0104166666666667 % NA in  1992"
+[1] "NA data years for duration 5:"
+[1] "0.0104166666666667 % NA in  1998"
+[1] "NA data years for duration 5:"
+[1] "0.0104166666666667 % NA in  2004"
+[1] "NA data years for duration 5:"
+[1] "0.0104166666666667 % NA in  2005"
+[1] "NA data years for duration 5:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 5:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 5:"
+[1] "1 % NA in  2010"
+DIC vals for duration 5 :
+[1] 506.1885
+[1] 487.8955
+[1] 566.3116
+[1] 500.914
+[1] 496.3853
+[1] 488.6432
+[1] "NA data years for duration 6:"
+[1] "0.0103092783505155 % NA in  1992"
+[1] "NA data years for duration 6:"
+[1] "0.0103092783505155 % NA in  1998"
+[1] "NA data years for duration 6:"
+[1] "0.0103092783505155 % NA in  2004"
+[1] "NA data years for duration 6:"
+[1] "0.0103092783505155 % NA in  2005"
+[1] "NA data years for duration 6:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 6:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 6:"
+[1] "1 % NA in  2010"
+DIC vals for duration 6 :
+[1] 513.4258
+[1] 495.9673
+[1] 514.2905
+[1] 526.9665
+[1] 504.6765
+[1] 535.095
+[1] "NA data years for duration 7:"
+[1] "0.0102040816326531 % NA in  1992"
+[1] "NA data years for duration 7:"
+[1] "0.0102040816326531 % NA in  1998"
+[1] "NA data years for duration 7:"
+[1] "0.0102040816326531 % NA in  2004"
+[1] "NA data years for duration 7:"
+[1] "0.0204081632653061 % NA in  2005"
+[1] "NA data years for duration 7:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 7:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 7:"
+[1] "1 % NA in  2010"
+DIC vals for duration 7 :
+[1] 523.2966
+[1] 502.2643
+[1] 496.4202
+[1] 511.9361
+[1] 496.0994
+[1] 504.3059
+[1] "NA data years for duration 10:"
+[1] "0.0099009900990099 % NA in  1992"
+[1] "NA data years for duration 10:"
+[1] "0.0099009900990099 % NA in  1998"
+[1] "NA data years for duration 10:"
+[1] "0.0099009900990099 % NA in  2004"
+[1] "NA data years for duration 10:"
+[1] "0.0297029702970297 % NA in  2005"
+[1] "NA data years for duration 10:"
+[1] "1 % NA in  2008"
+[1] "NA data years for duration 10:"
+[1] "1 % NA in  2009"
+[1] "NA data years for duration 10:"
+[1] "1 % NA in  2010"
+DIC vals for duration 10 :
+[1] 517.3842
+[1] 498.2877
+[1] 494.6051
+[1] 501.9217
+[1] 522.0975
+[1] 516.392
