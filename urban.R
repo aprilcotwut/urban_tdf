@@ -37,11 +37,11 @@ library(lubridate)
 warn_fits <<- list()
 warn_data <<- list()
 w <<- 1
-error <<- c(0,0,0,0)
-names(error) <- c("CI", "CI-R", "PLOT", "FEVD")
+error <<- c(0,0,0,0,0)
+names(error) <- c("CI", "CI-R", "PLOT", "FEVD", "BFs")
 
 IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
-        season, extreme = "max", forceGEV = FALSE, dir = NULL,
+        season, extreme = "max", forceGEV = FALSE, method = NULL, dir = NULL,
         polyFits = FALSE, alpha = 0.05) {
 
   # This season determines the start and end day of the observation based on
@@ -89,6 +89,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     trend_file = c()
     rl_file = c()
     idf_file = c()
+    info_file = paste(extra, "info_file.txt")
     for (i in 1:length(durations)) {
       trend_file[i] = paste(trend, "/trend-", durations[i], "day.jpeg", sep="")
       rl_file[i] = paste(rl, "/rlplot-", durations[i], "day.jpeg", sep="")
@@ -97,7 +98,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
             return_periods[j], "year-", durations[i], "day.jpeg", sep = "")
       }
     }
-    return(list(rl=rl_file, idf=idf_file, trend=trend_file))
+    return(list(rl=rl_file, idf=idf_file, trend=trend_file, info=info_file))
   }
 
   # This function reads in the data and determines the year range
@@ -172,79 +173,90 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 
   # make.Fits takes in information from the IDF function to develop fevd fits
   # for the dataset
-  make.Fits <- function(df, .forceGEV = forceGEV, forceType = NULL) {
-    years = df$YEAR
-    p <- cor.test(df$YEAR, df$DATA, method="kendall")$p.value
+  make.Fits <- function(df, .forceGEV = forceGEV, type = NULL, it = NULL, p = NULL) {
+    # Method setup #
+    if(is.null(method)) {
+      .method <- "MLE"
+    } else {
+      .method <- method
+      .forceGEV = TRUE
+    }
+    if (is.null(type)) {
+      # Enter in info for managing PP, etc
+    }
+    # Other Setup #
+    log <- file.Setup()$info
+    years <- df$YEAR
+    if (is.null(p)) {
+      p <- cor.test(df$YEAR, df$DATA, method="kendall")$p.value
+    }
     j <- 1
-    fits = list()
-
-    if ((!.forceGEV) && is.null(forceType)) {
+    fits <- list()
+    # Main function #
+    if ((!.forceGEV) && is.null(type)) {
       j <- 2
       warn_data <<- df
-      fits[[1]] <- fevd(df$DATA, df, type="Gumbel", method = "Bayesian", iter = 1000)
-      fits[[2]] <- fevd(df$DATA, df, type="GEV", method = "Bayesian", iter = 1000)
+      fits[[1]] <- fevd(df$DATA, df, type="Gumbel", method = .method, iter = it)
+      fits[[2]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it)
       lr = lr.test(fits[[1]], fits[[2]])
       if (lr$p.value < 0.05) {
         type <- "GEV"
-        shape <- ci(fits[[2]] , type="parameter", which.par=3)[2]
-        if (shape < 0) {
-          GEV_type <- "Weibull"
-        } else if (shape > 0) {
-          GEV_type <- "Frechet"
-        }
       } else {
         type <- "Gumbel"
-        GEV_type <- "Gumbel"
       }
     } else if (.forceGEV) {
-      fits[[1]] <- fevd(df$DATA, df, type="GEV", method = "Bayesian", iter = 1000)
-      print(class(fits[[1]]))
+      fits[[1]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it)
       if (class(fits[1]) == "character") {
         error[4] <<- error[4] + 1
         warn_data[w] <<- df
         w <<- w + 1
       }
       type <- "GEV"
-      GEV_type <- "NA"
     } else {
-      type <- forceType
-      fits[[1]] <- fevd(df$DATA, df, type=forceType, method = "Bayesian", iter = 1000)
+      fits[[1]] <- fevd(df$DATA, df, type=type, method = .method, iter = it)
     }
     data_years <- length(years)
     # If p < 0.05 the data is considered nonstationary
     if (p < 0.05) {
       ### Fits with location ~ year or ~year^2 ###
-      fits[[j+1]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+      fits[[j+1]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE))
-      fits[[j+2]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+      fits[[j+2]] <- fevd(df$DATA, df, type = type, method = .method, iter = 1000,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE))
 
       ### Fits with scale ~ year ###
-      fits[[j+3]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+      fits[[j+3]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
         scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1), use.phi = TRUE)
 
       ### Fits with location ~ year and scale ~ year ###
-      fits[[j+4]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+      fits[[j+4]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
           scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
           use.phi = TRUE)
-      fits[[j+5]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+      fits[[j+5]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
           scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
           use.phi = TRUE)
       if (polyFits) {
         ### Fits with scale ~ year^2 ###
-        fits[[j+6]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+        fits[[j+6]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
             scale.fun = ~ poly(YEAR, 2), use.phi = TRUE)
-        fits[[j+7]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+        fits[[j+7]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
             location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
             scale.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
             use.phi = TRUE)
-        fits[[j+8]] <- fevd(df$DATA, df, type = type, method = "Bayesian", iter = 1000,
+        fits[[j+8]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
             location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
             scale.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
             use.phi = TRUE)
       }
+    }
+    names(fits) <- seq(1, length(fits))
+    for (val in fits) {
+      tmp <- as.double(summary(val)$DIC)
+      sink(log, append = TRUE)
+      print(tmp)
+      sink()
     }
     return(fits)
   }
@@ -258,55 +270,96 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       return(best_fits)
     }
     # else determine the best fit
-    AIC <- c()
-    MLE <- c()
-    for (i in 1:length(fits)) {
-      tmp <- fits[[i]]
-      if ((length(tmp) > 1) && is.null(tmp$results$value)) {
-        best_fit <- estimate.GOF(tmp)
-        return(best_fit)
-      } else {
+    if (is.null(method) || method == "MLE") {
+      AIC <- c()
+      MLE <- c()
+      for (i in 1:length(fits)) {
+        tmp <- fits[[i]]
         MLE <- append(MLE, tmp$results$value)
         try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
-      }
-      if (!is.na(sum(AIC))) {
-        best_fit <- fits[[which.min(AIC)]]
-      } else {
-        if(is.null(MLE)) {
-          print(fits)
         }
-        best_fit <- fits[[which.min(MLE)]]
-      }
-    return(best_fit)
+        if (!is.na(sum(AIC))) {
+          best_fit <- fits[[which.min(AIC)]]
+        } else {
+          if(is.null(MLE)) {
+            print(fits)
+          }
+          best_fit <- fits[[which.min(MLE)]]
+        }
+      return(best_fit)
+      } else if (method == "Bayesian") {
+        DIC <- c()
+        if(length(fits) > 1) {
+          for(i in 1:length(fits)) {
+            tmp <- fits[[i]]
+            try({DIC <- append(DIC, as.double(summary(tmp$DIC)))})
+          }
+          if (!is.na(sum(DIC))) {
+            best_fit <- fits[[which.min(DIC)]]
+          } else {
+            best_fit <- fits[[1]]
+          }
+        } else {
+          best_fit <- fits[[1]]
+        }
+      return(best_fit)
     }
   }
 
   best.Fit <- function(fits) {
+    if(length(fits) == 1) {
+      return(fits[[1]])
+    }
     num_params <- c()
     best_fits <- list()
-    for (j in 1:length(fits)) {
-      num_params[j] <- length(fits[[j]]$results$par)
+    if (is.null(method) || method == "MLE") {
+      for (j in 1:length(fits)) {
+        num_params[j] <- length(fits[[j]]$results$par)
+      }
+    } else if (method == "Bayesian") {
+      for (j in 1:length(fits)) {
+        num_params[j] <- ncol(fits[[j]]$results)
+      }
     }
     k <- 1
     for (j in min(num_params):max(num_params)) {
       index <- which(num_params %in% j)
       if(!(length(index) == 0)) {
-          names(fits) <- seq(1, length(fits))
-          tmp <- subset(fits, names(fits) %in% index)
-          names(fits) <- NULL
-          names(tmp) <- NULL
-          best_fits[[k]] <- estimate.GOF(tmp)
-          k <- k + 1
+        tmp <- subset(fits, names(fits) %in% index)
+        best_fits[[k]] <- estimate.GOF(tmp)
+        k <- k + 1
       }
     }
     new_best <- best_fits[[1]]
-    for (j in 2:length(best_fits)) {
-      lr <- lr.test(new_best, best_fits[[j]])
-      if (lr$p.value < 0.05) {
-        new_best <- best_fits[[j]]
+    if (is.null(method) || method == "MLE") {
+      for (j in 2:length(best_fits)) {
+        lr <- lr.test(new_best, best_fits[[j]])
+        if (lr$p.value < 0.05) {
+          new_best <- best_fits[[j]]
+        }
       }
+      return(new_best)
+    } else if (method == "Bayesian") {
+      tmp <- as.double(summary(new_best)$DIC)
+      for (j in 2:length(best_fits)) {
+        factor <- as.numeric(BayesFactor(new_best, best_fits[[j]])[1])
+        if (is.nan(factor)) {
+          DIC_nb <- as.double(summary(new_best)$DIC)
+          DIC_fit <- as.double(summary(best_fits[[j]])$DIC)
+          if(is.nan(DIC_nb)) {
+            error[5] <<- error[5] + 1
+            new_best <- best_fits[[j]]
+          }
+          if (DIC_nb > DIC_fit) {
+            new_best <- best_fits[[j]]
+          }
+        }
+        else if (factor > 1.001) {
+          new_best <- best_fits[[j]]
+        }
+      }
+      return(new_best)
     }
-    return(new_best)
   }
 
   # This function develops the qcov matrix for a given fit, nonstationary or
@@ -342,34 +395,14 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # Given either a stationary or nonstationary fevd object, a qcov, and a
   # level of confidence (alpha) this function determines the return level and
   # confidence level for a given return period
-  return.Level <- function(df, fit, qcov, rp) {
+  return.Level <- function(df, fit, qcov, rp, p = NULL) {
     # Find significance and year range
-    p <- cor.test(df$YEAR, df$DATA, method="kendall")$p.value
-    # Calculate the confidence interval
-    ci <- tryCatch(ci(fit, alpha = alpha, return.period = rp, qcov = qcov),
-        error = function(e) print("CI Calc Error"))
-    # Error handling
-    if(class(ci) == "character") {
-      error[1] <<- error[1] + 1
-      if(fit$type == "GEV") {
-        type = "Gumbel"
-      } else {
-        type = "GEV"
-      }
-      .fits = make.Fits(df, forceType=type)
-      if(p < 0.05) {
-        new_best = best.Fit(.fits)
-        v <- qcov.Developer(df$YEAR, new_best)
-      } else {
-        new_best = fevd(df$DATA, df, type=type)
-      }
-      ci <- tryCatch(ci(fit, alpha = alpha, return.period = rp, qcov = qcov),
-          error = function(e) print("Retry CI Calc Error"))
-      if(class(ci) == "character") {
-        error[2] <<- error[2] + 1
-        return(list(x=0, y=0, ci_l=0, ci_u=0, err=0, warn=TRUE, ns=FALSE))
-      }
+    if (is.null(p)) {
+      p <- cor.test(df$YEAR, df$DATA, method="kendall")$p.value
     }
+    # Calculate the confidence interval
+    ci = ci(fit, alpha = alpha, return.period = rp, qcov = qcov)
+    # Error handling temp deleted
 
     # Develop confidence interval data
     x <- df$YEAR
@@ -378,25 +411,88 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       y <- rep(ci[2], length(x))
       ci_l <- rep(ci[1], length(x))
       ci_u <- rep(ci[3], length(x))
-      err <- (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha))
+      # err <- (ci_u-ci_l)/(qnorm(((1-alpha)/2)+alpha))
     } else {
       nonstationary = TRUE
       y <- ci[,2]
       ci_l <- ci[,1]
       ci_u <- ci[,3]
-      err <- ci[,4]
+      # err <- ci[,4]
     }
     # Error handling
-    if(is.na(mean(err))) {
-      print("Error! Irregular Fits" )
-      return(list(x=0, y=0, ci_l=0, ci_u=0, err=0, warn=TRUE, ns=FALSE))
-    } else if (mean(err) < 1e-4) {
+    if (mean(abs(ci_u - ci_l)) < 1e-4) {
       print("CI from fit unusually small")
       warning = FALSE
     } else {
       warning = FALSE
     }
-    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, err=err, warn=warning, ns=nonstationary))
+    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, warn=warning, ns=nonstationary))
+  }
+
+  # These function handles plot development for this codebase
+  # Develops the IDF plot
+  IDF.Plot <- function(dur_it, rp_it, rl_vals, fit, files = file.Setup()) {
+    if(rl_vals$ns && !rl_vals$warn) {
+      # IDF
+      jpeg(files$idf[(dur_it - 1)*length(return_periods) + rp_it], width=500, height=750)
+      plot(rl_vals$x, rl_vals$y, ylim=range(c(rl_vals$ci_l, rl_vals$ci_u)),
+          ylab="DATA", xlab="YEAR", main = paste(return_periods[j],
+          "-Year Return Levels for ", durations[dur_it], " Day Events in ", dir,
+          sep=""), type = "o")
+      arrows(rl_vals$x, rl_vals$ci_l, rl_vals$x, rl_vals$ci_u, length=0.05, angle=90, code=3)
+      dev.off()
+      # RL
+      jpeg(files$rl[(dur_it)], width=500, height=750)
+      result <- tryCatch(plot(fit), error = function(e) print("RL Plot error"))
+      dev.off()
+    # Otherwise just plot the typical RL plot
+    } else {
+      jpeg(files$rl[dur_it], width=500, height=750)
+      result <- tryCatch(plot(fit), error = function(e) print("RL Plot error"))
+      dev.off()
+      if(class(result) == "character" || rl_vals$warn) {
+        error[3] <<- error[3] + 1
+        warn_fits[[w]] <<- fit
+        w <<- w + 1
+      }
+    }
+  }
+
+  # Develops the trend plots for the data
+  trend.Plot <- function(df, dur_it, files = file.Setup()) {
+    # Determine linear trend and significance
+    mk <- cor.test(df$YEAR, df$DATA, method="kendall")
+    tau <- as.double(mk$estimate)
+    p <- mk$p.value
+    # Begin plot
+    jpeg(files$trend[dur_it])
+    # Indicate locations of extremes
+    if (extreme == "max") {
+      extr_locs <- order(df$DATA, decreasing=TRUE)[1:2]
+      extr_data <- df[extr_locs, 2]
+    } else {
+      extr_locs <- order(df$DATA, decreasing=FALSE)[1:2]
+      extr_data <- df[extr_locs, 2]
+    }
+    # Plot data with extremes indicated in red
+    plot(df$YEAR, df$DATA,
+      col=ifelse(df$DATA == extr_data[1] | df$DATA ==
+          extr_data[2], "red", "black"),
+      pch=ifelse(df$DATA == extr_data[1] | df$DATA ==
+          extr_data[2], 19, 1))
+    # Add linear plot line and equation
+    trend <- lm(df$DATA ~ df$YEAR)
+    intercept <- signif(coef(trend)[1], 4)
+    slope <- signif(coef(trend)[2], 4)
+    eq <- paste("DATA =", slope, "YEAR +", intercept)
+    abline(trend, col="#e66101")
+    mtext(eq, 3, line=-2)
+    # Add quadratic plot line
+    trend <- lm(df$DATA ~ poly(df$YEAR, 2, raw = TRUE))
+    predicted <- predict(trend, data.frame(x=df$YEAR),
+        interval='confidence', level=0.95)
+    lines(df$YEAR, predicted[,1], col="#5e3c99")
+    dev.off()
   }
 
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
@@ -415,94 +511,55 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # Data fixes and other setup
   names(data) <- c("DATE", "DATA")
   data$DATE <- as.POSIXct(data$DATE)
-  if (!is.null(dir)) {
-    file <- file.Setup()
-  }
+  log <- file.Setup()$info
+  close(file(log, open="w"))
 
   # # # # # # # # # # # # # # # #
   # # Begin Analysis for IDF  # #
   # # # # # # # # # # # # # # # #
 
+  # Determine the yearly maximum's trend
+  block_max <- rolling.BlockMaxima(year.Range(season.Setup()),
+      duration.Setup(1, season.Setup()), 1)
+  p_abs <- cor.test(block_max$YEAR, block_max$DATA, method = "kendall")$p.value
+
+  cat(paste("Yearly Seasonal Extreme Year/Value Correlation P_val:", signif(p_abs, 4),
+      "\n"), file = log, append = TRUE)
+
+  if(!is.null(dir)) {
+    trend.Plot(block_max, 1)
+  }
   # For each duration calculate the IDF
   for (i in 1:length(durations)) {
+    print(paste("Analyzing Duration", durations[i]))
     return_vals[[i]] <- list()
     dur_init <- duration.Setup(durations[i], season.Setup())
-
     # Apply rolling mean block maxima
     extremes[[i]] <- rolling.BlockMaxima(year.Range(season.Setup()), dur_init,
         durations[i])
-
-    # Begin trend tests
-    mk <- cor.test(extremes[[i]]$YEAR, extremes[[i]]$DATA, method="kendall")
-    tau <- as.double(mk$estimate)
-    p <- mk$p.value
-
-    # # # #
-    # # Block Maxima Trend Plot
-    # # # #
+    # Plot trends (as given by Mann Kendall Test, lm(), and a prediction of the
+    # quadratic fit)
     if(!is.null(dir)) {
-      jpeg(file$trend[i])
-      max_locs = order(extremes[[i]]$DATA, decreasing=TRUE)[1:3]
-      max_data = extremes[[i]][max_locs, 2]
-      plot(extremes[[i]]$YEAR, extremes[[i]]$DATA,
-        col=ifelse(extremes[[i]]$DATA == max_data[1] | extremes[[i]]$DATA ==
-            max_data[2], "red", "black"),
-        pch=ifelse(extremes[[i]]$DATA == max_data[1] | extremes[[i]]$DATA ==
-            max_data[2], 19, 1))
-      trend = lm(extremes[[i]]$DATA ~ extremes[[i]]$YEAR)
-      intercept = signif(coef(trend)[1], 4)
-      slope = signif(coef(trend)[2], 4)
-      eq = paste("DATA =", slope, "YEAR +", intercept)
-      abline(trend, col="#e66101")
-      mtext(eq, 3, line=-2)
-
-      trend = lm(extremes[[i]]$DATA ~ poly(extremes[[i]]$YEAR, 2, raw = TRUE))
-      predicted = predict(trend, data.frame(x=extremes[[i]]$YEAR),
-          interval='confidence', level=0.95)
-      lines(extremes[[i]]$YEAR, predicted[,1], col="#5e3c99")
-      dev.off()
+      trend.Plot(extremes[[i]], i)
     }
-
-    # # # #
-    # # Model Fitting and Determining Return Levels
-    # # # #
-    tmp_fits <- make.Fits(extremes[[i]])
+    # Fit models and determine return levels
+    cat(paste("DIC vals for duration", durations[i], ":\n", sep=" "), file = log,
+        append = TRUE)
+    tmp_fits <- make.Fits(extremes[[i]], it = 2000, p = p_abs)
     #TODO: Do a lot of checking before proceeding...
-
     fits[[i]] <- tmp_fits
     new_best = best.Fit(fits[[i]])
-    v <- qcov.Developer(extremes[[i]]$YEAR, new_best)
-
+    if (is.null(method) || method == "MLE") {
+      v <- qcov.Developer(extremes[[i]]$YEAR, new_best)
+    } else {
+      v <- NULL
+    }
+    # For each return period determine the predicted return levels
     for (j in 1:length(return_periods)) {
-      rl <- return.Level(extremes[[i]], new_best, v, return_periods[j])
-
-      # # # #
-      # # IDF and Return Level PLots
-      # # # #
-
-      # Given our model is nonstationary, plotting is wanted, and no warnings
+      rl <- return.Level(extremes[[i]], new_best, v, return_periods[j], p = p_abs)
+      # Then plot the findings
       if (!is.null(dir)) {
-        if(rl$ns && !rl$warn) {
-          jpeg(file$idf[(i - 1)*length(return_periods) + j], width=500, height=750)
-          plot(rl$x, rl$y, ylim=range(c(rl$ci_l, rl$ci_u)),
-              ylab="DATA", xlab="YEAR", main = paste(return_periods[j],
-              "-Year Return Levels for ", durations[i], " Day Events in ", dir,
-              sep=""), type = "o")
-          arrows(rl$x, rl$ci_l, rl$x, rl$ci_u, length=0.05, angle=90, code=3)
-          dev.off()
-        # Otherwise just plot the typical RL plot
-        } else {
-          jpeg(file$idf[(i - 1)*length(return_periods) + j], width=500, height=750)
-          result = tryCatch(plot(new_best, "rl"), error = function(e)
-              print("Plot (RL) Error"))
-          dev.off()
-          if(class(result) == "character" || rl$warn) {
-            error[3] <<- error[3] + 1
-            warn_fits[[w]] <<- new_best
-            warn_data[[w]] <<- extremes[[i]]
-            w <<- w + 1
-          }
-        }
+        IDF.Plot(i, j, rl, new_best)
       }
       return_vals[[i]][[j]] <- rl
     }
@@ -510,39 +567,68 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   return(return_vals)
 }
 
-# # # #
-# # Testing
-# # # #
+
+
+
+
+# # # # # # # # # # # # # # # # # # # # # #
+# # Testing for urban.R's IDF Function  # #
+# # # # # # # # # # # # # # # # # # # # # #
 
 # declare data directory
 options(error = function() traceback(2))
 
-dir <- "Data"
+# # Update based on rural city only analysis # #
+# dir <- "Data"
+dir <- file.path("Data", "Rural")
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
+
 date_cols <- c("YEAR", "MO", "DA")
 data_cols <- c("TEMP", "PRCP", "MAX", "MIN")
 all_cols = c(date_cols, data_cols)
 
-# declare dataset with header based on cities in dataset
-files <- system(sys_call, intern = TRUE)
-cities <- unlist(strsplit(files, "\\."))[2*(1:length(files))-1]
-data <- vector("list", length(files))
-names(data) <- cities
-
-for (i in 1:length(files)) {
-  path <- file.path(dir, files[i])
-  data[[cities[i]]] <- read.csv(path, header = TRUE)
-  data[[cities[i]]] <- select(data[[cities[i]]], one_of(all_cols))
-}
-
 durations <- c(1,2,3,4,5,6,7,10)
 seasons <- c(1,2,3,4)
 
+# declare dataset with header based on cities in dataset
+files <- system(sys_call, intern = TRUE)
+cities <- unlist(strsplit(files, "\\."))[2*(1:length(files))-1]
+
+# # Uncomment For Cities Only # #
+# data <- vector("list", length(files))
+# names(data) <- cities
+# for (i in 1:length(files)) {
+#   path <- file.path(dir, files[i])
+#   data[[cities[i]]] <- read.csv(path, header = TRUE)
+#   data[[cities[i]]] <- select(data[[cities[i]]], one_of(all_cols))
+# }
+
+# # Uncomment For Rural Analysis # #
+tmp <- list()
+for (i in 1:length(files)) {
+  path <- file.path(dir, files[i])
+  tmp[[i]] <- read.csv(path, header = TRUE)
+  tmp[[i]] <- select(tmp[[i]], one_of(all_cols))
+}
+
+
+
+
+
+
+
+
 print("Begin analysis:")
+
+
+
+# # # #
+# # Running IDF
+# # # #
 
 # For now let's just focus on temp
 val = "TEMP"
-# city = "Kansas"
+
 # for(val in data_cols)
 for(city in cities) {
   print(paste("Analyzing data from", city))
@@ -558,7 +644,7 @@ for(city in cities) {
     test <- select(data[[city]], cols)
     test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
     test$DATE <- as.POSIXct(test$DATE)
-    returns <- IDF(data=test, season=s, dir=directory)
+    returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
     # returns <- tryCatch(IDF(test, durations, c(2, 20, 100), season, "max", TRUE,
     #     dir, FALSE), error = function(e) print("IDF Function Error"))
     # if(class(returns) == "character") {

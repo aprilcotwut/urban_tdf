@@ -1,0 +1,17 @@
+Yearly Seasonal Extreme Year/Value Correlation P_val: 0.09075 
+DIC vals for duration 1 :
+[1] 449.2993
+DIC vals for duration 2 :
+[1] 453.8895
+DIC vals for duration 3 :
+[1] 452.2219
+DIC vals for duration 4 :
+[1] 468.8775
+DIC vals for duration 5 :
+[1] 471.847
+DIC vals for duration 6 :
+[1] 475.977
+DIC vals for duration 7 :
+[1] 468.4602
+DIC vals for duration 10 :
+[1] 471.9766
