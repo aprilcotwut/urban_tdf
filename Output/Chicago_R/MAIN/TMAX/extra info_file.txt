@@ -1,10 +1,35 @@
-Yearly Seasonal Extreme Year/Value Correlation P_val: 0.1221 
+[1] "NA data years for duration1:"
+[1] 1980
+Yearly Seasonal Extreme Year/Value Correlation P_val: 0.1137 
+[1] "NA data years for duration1:"
+[1] 1980
 DIC vals for duration 1 :
-[1] 642.1695
+[1] 638.3696
+[1] "NA data years for duration2:"
+[1] 1980
 DIC vals for duration 2 :
-[1] 608.6995
+[1] 609.4169
+[1] "NA data years for duration3:"
+[1] 1980
 DIC vals for duration 3 :
-[1] 605.5227
+[1] 610.3427
+[1] "NA data years for duration4:"
+[1] 1980
 DIC vals for duration 4 :
-[1] 610.7395
+[1] 611.1239
+[1] "NA data years for duration5:"
+[1] 1980
 DIC vals for duration 5 :
+[1] 610.1806
+[1] "NA data years for duration6:"
+[1] 1980
+DIC vals for duration 6 :
+[1] 606.4476
+[1] "NA data years for duration7:"
+[1] 1980
+DIC vals for duration 7 :
+[1] 598.7932
+[1] "NA data years for duration10:"
+[1] 1980
+DIC vals for duration 10 :
+[1] 590.1188

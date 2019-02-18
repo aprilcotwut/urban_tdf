@@ -1,0 +1,75 @@
+[1] "NA data years for duration1:"
+[1] 2003
+Yearly Seasonal Extreme Year/Value Correlation P_val: 0.04236 
+[1] "NA data years for duration1:"
+[1] 2003
+DIC vals for duration 1 :
+[1] 271.3412
+[1] 271.4692
+[1] 269.7993
+[1] 269.1343
+[1] 258.3006
+[1] 282.2517
+[1] "NA data years for duration2:"
+[1] 2003 2009
+DIC vals for duration 2 :
+[1] 256.6114
+[1] 274.7818
+[1] 272.3143
+[1] 273.7035
+[1] 273.6485
+[1] 261.3892
+[1] "NA data years for duration3:"
+[1] 2003 2009
+DIC vals for duration 3 :
+[1] 241.8958
+[1] 234.0331
+[1] 227.1502
+[1] 247.6549
+[1] 248.1178
+[1] 244.27
+[1] "NA data years for duration4:"
+[1] 2003 2009
+DIC vals for duration 4 :
+[1] 222.5687
+[1] 227.1883
+[1] 223.6483
+[1] 234.3447
+[1] 254.567
+[1] 238.0889
+[1] "NA data years for duration5:"
+[1] 2003 2009
+DIC vals for duration 5 :
+[1] 214.0448
+[1] 215.1888
+[1] 215.3085
+[1] 237.5641
+[1] 215.6906
+[1] 224.6895
+[1] "NA data years for duration6:"
+[1] 2003 2009
+DIC vals for duration 6 :
+[1] 215.0459
+[1] 212.7155
+[1] 233.8778
+[1] 222.4744
+[1] 235.8234
+[1] 237.0273
+[1] "NA data years for duration7:"
+[1] 2003 2009
+DIC vals for duration 7 :
+[1] 217.4016
+[1] 216.4081
+[1] 220.7484
+[1] 232.6592
+[1] 232.23
+[1] 244.0533
+[1] "NA data years for duration10:"
+[1] 2003 2009
+DIC vals for duration 10 :
+[1] 215.2549
+[1] 221.6131
+[1] 207.8374
+[1] 215.0962
+[1] 233.1319
+[1] 219.5665
