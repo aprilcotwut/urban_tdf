@@ -583,19 +583,21 @@ options(error = function() traceback(2))
 dir <- file.path("Data", "Rural")
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
 
-date_cols <- c("YEAR", "MO", "DA")
-data_cols <- c("TEMP", "PRCP", "MAX", "MIN")
-all_cols = c(date_cols, data_cols)
-
 durations <- c(1,2,3,4,5,6,7,10)
 seasons <- c(1,2,3,4)
 
 # declare dataset with header based on cities in dataset
 files <- system(sys_call, intern = TRUE)
 cities <- unlist(strsplit(files, "\\."))[2*(1:length(files))-1]
+data <- vector("list", length(files))
 
+# # # # # # # # # # # # # # # # #
 # # Uncomment For Cities Only # #
-# data <- vector("list", length(files))
+# # # # # # # # # # # # # # # # #
+
+# date_cols <- c("YEAR", "MO", "DA")
+# data_cols <- c("TEMP", "PRCP", "MAX", "MIN")
+# all_cols = c(date_cols, data_cols)
 # names(data) <- cities
 # for (i in 1:length(files)) {
 #   path <- file.path(dir, files[i])
@@ -603,58 +605,96 @@ cities <- unlist(strsplit(files, "\\."))[2*(1:length(files))-1]
 #   data[[cities[i]]] <- select(data[[cities[i]]], one_of(all_cols))
 # }
 
-# # Uncomment For Rural Analysis # #
-tmp <- list()
-for (i in 1:length(files)) {
-  path <- file.path(dir, files[i])
-  tmp[[i]] <- read.csv(path, header = TRUE)
-  tmp[[i]] <- select(tmp[[i]], one_of(all_cols))
-}
-
-
-
-
-
-
-
-
-print("Begin analysis:")
-
-
-
 # # # #
 # # Running IDF
 # # # #
 
-# For now let's just focus on temp
-val = "TEMP"
+# print("Begin analysis:")
 
+# # For now let's just focus on temp
+# val = "TEMP"
+# # for(val in data_cols)
+# for(city in cities) {
+#   print(paste("Analyzing data from", city))
+#   for (s in seasons) {
+#     #Make some directories
+#     directory <- "Output"
+#     dir.create(directory)
+#     directory <- file.path(directory, city)
+#     dir.create(directory)
+#     directory <- file.path(directory, val)
+#     #Data prep
+#     cols <- c(date_cols, val)
+#     test <- select(data[[city]], cols)
+#     test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
+#     test$DATE <- as.POSIXct(test$DATE)
+#     returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
+#   }
+# }
+# # }
+
+# # # # # # # # # # # # # # # # # # #
+# # Uncomment For Rural Analysis  # #
+# # # # # # # # # # # # # # # # # # #
+cities <- unlist(strsplit(cities, "\\_"))[2*(1:length(cities))-1]
+names(data) <- cities
+data_cols <- c("TAVG", "PRCP", "TMAX", "TMIN")
+all_cols = c("DATE", data_cols)
+seasons = c("winter", "spring", "summer", "fall")
+tmp <- list()
+for (i in 1:length(files)) {
+  path <- file.path(dir, files[i])
+  tmp[[i]] <- read.csv(path, header = TRUE)
+  data[[cities[[i]]]] <- list()
+  if (cities[i] == "NYC") {
+    data[[cities[i]]]$MAIN <- tmp[[i]] %>%
+        filter(grepl("NY CITY", NAME))
+    tmp[[i]] <- tmp[[i]] %>%
+        filter(!grepl("NY CITY", NAME))
+  } else {
+    data[[cities[i]]]$MAIN <- tmp[[i]] %>%
+        filter(grepl(toupper(cities[i]), NAME))
+    tmp[[i]] <- tmp[[i]] %>%
+        filter(!grepl(toupper(cities[i]), NAME))
+  }
+  rural <- as.character(unique(tmp[[i]]$NAME))
+  rural <- unlist(strsplit(rural, ","))[2*(1:length(rural))-1]
+  r_names <- gsub(" ", "_", rural)
+  for (j in 1:length(rural)) {
+    data[[cities[[i]]]][[r_names[j]]] <- tmp[[i]] %>%
+        filter(grepl(rural[j], NAME))
+  }
+}
+
+print("Begin analysis:")
+
+# # For now let's just focus on temp
+val = "TMAX"
+s = "summer"
 # for(val in data_cols)
 for(city in cities) {
   print(paste("Analyzing data from", city))
-  for (s in seasons) {
-    #Make some directories
-    directory <- "Output"
-    dir.create(directory)
-    directory <- file.path(directory, city)
-    dir.create(directory)
-    directory <- file.path(directory, val)
-    #Data prep
-    cols <- c(date_cols, val)
-    test <- select(data[[city]], cols)
-    test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
-    test$DATE <- as.POSIXct(test$DATE)
-    returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
-    # returns <- tryCatch(IDF(test, durations, c(2, 20, 100), season, "max", TRUE,
-    #     dir, FALSE), error = function(e) print("IDF Function Error"))
-    # if(class(returns) == "character") {
-    #   print(city)
-    #   print(s)
-    #   print(head(test))
-    # }
+  for (loc in names(data[[city]])) {
+    print(paste("Analyzing", loc))
+    # for (s in seasons) {
+      #Make some directories
+      directory <- "Output"
+      dir.create(directory)
+      city_R <- paste(city, "_R", sep = "")
+      directory <- file.path(directory, city_R)
+      dir.create(directory)
+      directory <- file.path(directory, loc)
+      dir.create(directory)
+      directory <- file.path(directory, val)
+      dir.create(directory)
+      #Data prep
+      print(data[[city]][[loc]])
+      cols <- c("DATE", val)
+      test <- select(data[[city]][[loc]], cols)
+      test$DATE <- as.POSIXct(test$DATE)
+      returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
   }
 }
-# }
 
 print("End analysis")
 print(error)
