@@ -164,9 +164,15 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
           mutate(DATE = as.Date(DATE)) %>%
           complete(DATE = dates)
       # If the dataset is mostly complete, replace the empties with the mean
-      if (mean(is.na(tmp$DATA)) < 0.50) {
-      tmp <- tmp %>%
-          replace_na(DATA = mean(tmp$DATA, na.rm=TRUE))
+      if (mean(is.na(tmp$DATA)) > 0) {
+        sink(log, append = TRUE)
+        print(paste("NA data years for duration ", duration, ":", sep=""))
+        print(paste(mean(is.na(tmp$DATA)), "% NA in ", yr), sep = "")
+        sink()
+        if (mean(is.na(tmp$DATA)) < 0.5) {
+        tmp <- tmp %>%
+            replace_na(DATA = mean(tmp$DATA, na.rm=TRUE))
+        }
       }
       # Else wait till end to take average of previous and following year
 
@@ -179,12 +185,9 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     NAs <- which(is.na(block_max$DATA))
     if (length(NAs) == 0) {
       return(block_max)
+    } else {
+      # Note the NA location
     }
-    # Note the NA location
-    sink(log, append = TRUE)
-    print(paste("NA data years for duration", duration, ":", sep=""))
-    print(block_max$YEAR[NAs])
-    sink()
     # Predict values
     if (mean(is.na(block_max$DATA)) > 0.70) {
       sink(log, append = TRUE)
