@@ -42,7 +42,7 @@ names(error) <- c("CI", "CI-R", "PLOT", "FEVD", "BFs")
 
 IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         season, extreme = "max", forceGEV = FALSE, method = NULL, dir = NULL,
-        polyFits = FALSE, alpha = 0.05) {
+        polyFits = FALSE, alpha = 0.05, stationary = FALSE) {
 
   # This season determines the start and end day of the observation based on
   # what season is indicated to be studied
@@ -86,19 +86,24 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     dir.create(season_idf)
     dir.create(trend)
     dir.create(rl)
-    trend_file = c()
-    rl_file = c()
-    idf_file = c()
-    info_file = paste(extra, "info_file.txt")
+    trend_file <- c()
+    rl_file <- c()
+    idf_file <- c()
+    idf2_file <- c()
+    info_file <- paste(extra, "info_file.txt")
     for (i in 1:length(durations)) {
-      trend_file[i] = paste(trend, "/trend-", durations[i], "day.jpeg", sep="")
-      rl_file[i] = paste(rl, "/rlplot-", durations[i], "day.jpeg", sep="")
+      trend_file[i] <- paste(trend, "/trend-", durations[i], "day.jpeg", sep="")
+      rl_file[i] <- paste(rl, "/rlplot-", durations[i], "day.jpeg", sep="")
       for (j in 1:length(return_periods)) {
-        idf_file[(i - 1)*length(return_periods) + j] = paste(season_idf, "/idf-",
+        idf_file[(i - 1)*length(return_periods) + j] <- paste(season_extra, "/idf-",
             return_periods[j], "year-", durations[i], "day.jpeg", sep = "")
       }
     }
-    return(list(rl=rl_file, idf=idf_file, trend=trend_file, info=info_file))
+    for (j in 1:length(return_periods)) {
+      idf2_file[j] <- paste(season_idf, "/idf-", return_periods[j], "year.jpeg",
+          sep = "")
+    }
+    return(list(rl=rl_file, idf=idf_file, idf2=idf2_file, trend=trend_file, info=info_file))
   }
 
   # This function reads in the data and determines the year range
@@ -264,7 +269,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     }
     data_years <- length(years)
     # If p < 0.05 the data is considered nonstationary
-    if (p < 0.05) {
+    if ((p < 0.05) && (stationary == FALSE)) {
       ### Fits with location ~ year or ~year^2 ###
       fits[[j+1]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE))
@@ -477,34 +482,6 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   }
 
   # These function handles plot development for this codebase
-  # Develops the IDF plot
-  IDF.Plot <- function(dur_it, rp_it, rl_vals, fit, files = file.Setup()) {
-    if(rl_vals$ns && !rl_vals$warn) {
-      # IDF
-      jpeg(files$idf[(dur_it - 1)*length(return_periods) + rp_it], width=500, height=750)
-      plot(rl_vals$x, rl_vals$y, ylim=range(c(rl_vals$ci_l, rl_vals$ci_u)),
-          ylab="DATA", xlab="YEAR", main = paste(return_periods[j],
-          "-Year Return Levels for ", durations[dur_it], " Day Events in ", dir,
-          sep=""), type = "o")
-      arrows(rl_vals$x, rl_vals$ci_l, rl_vals$x, rl_vals$ci_u, length=0.05, angle=90, code=3)
-      dev.off()
-      # RL
-      jpeg(files$rl[(dur_it)], width=500, height=750)
-      result <- tryCatch(plot(fit), error = function(e) print("RL Plot error"))
-      dev.off()
-    # Otherwise just plot the typical RL plot
-    } else {
-      jpeg(files$rl[dur_it], width=500, height=750)
-      result <- tryCatch(plot(fit), error = function(e) print("RL Plot error"))
-      dev.off()
-      if(class(result) == "character" || rl_vals$warn) {
-        error[3] <<- error[3] + 1
-        warn_fits[[w]] <<- fit
-        w <<- w + 1
-      }
-    }
-  }
-
   # Develops the trend plots for the data
   trend.Plot <- function(df, dur_it, files = file.Setup()) {
     # Determine linear trend and significance
@@ -540,6 +517,89 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         interval='confidence', level=0.95)
     lines(df$YEAR, predicted[,1], col="#5e3c99")
     dev.off()
+  }
+
+  # Develops the extra IDF/RL plots developed for each duration as a check
+  extra.Plot <- function(dur_it, rp_it, rl_vals, fit, files = file.Setup()) {
+    if(rl_vals$ns && !rl_vals$warn) {
+      # IDF
+      jpeg(files$idf[(dur_it - 1)*length(return_periods) + rp_it], width=500, height=750)
+      plot(rl_vals$x, rl_vals$y, ylim=range(c(rl_vals$ci_l, rl_vals$ci_u)),
+          ylab="DATA", xlab="YEAR", main = paste(return_periods[j],
+          "-Year Return Levels for ", durations[dur_it], " Day Events in ", dir,
+          sep=""), type = "o")
+      arrows(rl_vals$x, rl_vals$ci_l, rl_vals$x, rl_vals$ci_u, length=0.05, angle=90, code=3)
+      dev.off()
+      # RL
+      jpeg(files$rl[(dur_it)], width=500, height=750)
+      result <- tryCatch(plot(fit), error = function(e) print("RL Plot error"))
+      dev.off()
+    # Otherwise
+    } else {
+      # Just plot standard rl graph
+      jpeg(files$rl[dur_it], width=500, height=750)
+      result <- tryCatch(plot(fit), error = function(e) print("RL Plot error"))
+      dev.off()
+      if(class(result) == "character" || rl_vals$warn) {
+        error[3] <<- error[3] + 1
+        warn_fits[[w]] <<- fit
+        w <<- w + 1
+      }
+    }
+  }
+
+  # Develops the main plots
+  main.Plot <- function(rl_vals, files = file.Setup()) {
+    x <- durations
+
+    warn <- FALSE
+
+    i <- length(rl_vals) #should be the number of durations
+    j <- length(rl_vals[[1]]) #should be the number of return periods
+
+    m <- 1
+    n <- 1
+    stop <- FALSE
+    while(!stop && (m <= i) && (n <= j)) {
+      if(rl_vals[[m]][[n]]$ns) {
+        stop <- TRUE
+      } else {
+        m <- m + 1
+        n <- n + 1
+      }
+    }
+    rm(m,n)
+
+    ns <- stop
+
+    if(ns && (length(rl_vals[[m]][[n]]) != length(years))) {
+      warn <- TRUE
+      print("Error main plot ns year length")
+    }
+    # If all RL models are stationary, devlop the 2D IDF curve
+    if(!ns) {
+      # Repeat for each return period
+      for(n in 1:j) {
+        y = ci_l = ci_u <- rep(0, i) # holds data & confidence interval
+        # Handle data for each duration
+        for(m in 1:i) {
+          y[m] <- rl_vals[[m]][[n]]$y[1]
+          ci_l[m] <- rl_vals[[m]][[n]]$ci_l[1]
+          ci_u[m] <- rl_vals[[m]][[n]]$ci_u[1]
+        }
+        jpeg(files$idf2[n], width=500, height=750)
+        plot(x, y, ylim=range(c(ci_l, ci_u)), ylab="DATA", xlab="YEAR",
+            main = paste(return_periods[n], "-Year Return Levels Curve", dir,
+            sep=""), type = "o")
+        arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3)
+        dev.off()
+      }
+
+    # Else develop the 3d IDF curve and adjust stationary findings
+    } else {
+    #TODO: 3D TDF curves  
+    }
+
   }
 
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
@@ -610,10 +670,13 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       rl <- return.Level(extremes[[i]], new_best, v, return_periods[j], p = p_abs)
       # Then plot the findings
       if (!is.null(dir)) {
-        IDF.Plot(i, j, rl, new_best)
+        extra.Plot(i, j, rl, new_best)
       }
       return_vals[[i]][[j]] <- rl
     }
+  }
+  if (length(return_vals) >= 1) {
+    main.Plot(return_vals)
   }
   return(return_vals)
 }
@@ -743,7 +806,8 @@ for(city in cities) {
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
       print(head(test))
-      returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
+      returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory,
+          stationary = TRUE)
   }
 }
 
