@@ -1,6 +1,7 @@
 library(tidyverse)
 library(extRemes)
 library(zoo)
+library(plotly)
 library(lubridate)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -556,6 +557,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 
     i <- length(rl_vals) #should be the number of durations
     j <- length(rl_vals[[1]]) #should be the number of return periods
+    k <- length(rl_vals[[1]][[1]]$x) #should be the number of years of data
 
     m <- 1
     n <- 1
@@ -568,36 +570,46 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         n <- n + 1
       }
     }
-    rm(m,n)
-
     ns <- stop
-
-    if(ns && (length(rl_vals[[m]][[n]]) != length(years))) {
-      warn <- TRUE
-      print("Error main plot ns year length")
-    }
+    rm(m,n)
     # If all RL models are stationary, devlop the 2D IDF curve
     if(!ns) {
       # Repeat for each return period
       for(n in 1:j) {
-        y = ci_l = ci_u <- rep(0, i) # holds data & confidence interval
+        z = ci_l = ci_u <- rep(0, i) # holds data & confidence interval
         # Handle data for each duration
         for(m in 1:i) {
-          y[m] <- rl_vals[[m]][[n]]$y[1]
+          z[m] <- rl_vals[[m]][[n]]$y[1]
           ci_l[m] <- rl_vals[[m]][[n]]$ci_l[1]
           ci_u[m] <- rl_vals[[m]][[n]]$ci_u[1]
         }
+
         jpeg(files$idf2[n], width=500, height=750)
-        plot(x, y, ylim=range(c(ci_l, ci_u)), ylab="DATA", xlab="YEAR",
+        plot(x, z, ylim=range(c(ci_l, ci_u)), ylab="DATA", xlab="YEAR",
             main = paste(return_periods[n], "-Year Return Levels Curve", dir,
             sep=""), type = "o")
-        arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3)
+        arrows(z, ci_l, z, ci_u, length=0.05, angle=90, code=3)
         dev.off()
       }
 
     # Else develop the 3d IDF curve and adjust stationary findings
     } else {
-    #TODO: 3D TDF curves  
+      # Repeat for each return period
+      for(n in 1:j) {
+        z = ci_l = ci_u <- matrix(0, nrow=k, ncol=i) # holds data & confidence interval
+        y <- rl_vals[[1]][[n]]$x
+        # Handle data for each duration
+        for(m in 1:i) {
+          z[,m] <- rl_vals[[m]][[n]]$y
+          ci_l[,m] <- rl_vals[[m]][[n]]$ci_l
+          ci_u[,m] <- rl_vals[[m]][[n]]$ci_u
+        }
+
+        jpeg(files$idf2[n], width=500, height=750)
+        persp(x, y, t(z), phi=20, theta=30, ticktype="detailed")
+        dev.off()
+      }
+
     }
 
   }
@@ -786,7 +798,8 @@ print("Begin analysis:")
 val = "TMAX"
 s = "summer"
 # for(val in data_cols)
-for(city in cities) {
+# for(city in cities) {
+city <- cities[2]
   print(paste("Analyzing data from", city))
   for (loc in names(data[[city]])) {
     print(paste("Analyzing", loc))
@@ -806,10 +819,9 @@ for(city in cities) {
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
       print(head(test))
-      returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory,
-          stationary = TRUE)
+      returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
   }
-}
+# }
 
 print("End analysis")
 print(error)
