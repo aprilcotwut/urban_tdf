@@ -17,7 +17,8 @@ library(lubridate)
 #       the data as a POSIXct type or a character type in %Y-%m-%d
 #       format, and the second column containing the data to analyze.
 #    durations - This should be the a vector containing the various day-long
-#       durations you wish to use in your IDF. The default is c(1:7,10)
+#       durations you wish to use in your IDF. The default is c(1:7,10). NOTE:
+#       this should be from the smallest duration to the longest.
 #    return_periods - This should be a vector containing the return periods which
 #       you want to calculate the return level's (and IDF) for.
 #    season - This input should be a single word character string or integer
@@ -91,7 +92,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     rl_file <- c()
     idf_file <- c()
     idf2_file <- c()
-    info_file <- paste(extra, "info_file.txt")
+    info_file <- file.path(extra, "info_file.txt")
     for (i in 1:length(durations)) {
       trend_file[i] <- paste(trend, "/trend-", durations[i], "day.jpeg", sep="")
       rl_file[i] <- paste(rl, "/rlplot-", durations[i], "day.jpeg", sep="")
@@ -130,6 +131,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     return(start:end)
   }
 
+  years <- year.Range(season.Setup())
+
   # This devlops the start and end day for a particular duration, and assumes
   # the rolling average is calculated to be centered around the period of
   # interest
@@ -146,11 +149,18 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       return(list(start=dur_start, end=dur_end))
   }
 
-  # This function determines the maximum or minimum value for each year in a
-  # dataset, then returns a new dataset with this information
-  rolling.BlockMaxima <- function(years, days, duration) {
-    block_max = c()
-    log <- file.Setup()$info
+
+  # This function handles incomplete data.
+  complete.Data <- function() {
+    days <- duration.Setup(max(durations), season.Setup())
+    duration <- max(durations)
+    tmp <- get.Seasonal.Data(days, duration)
+
+    #TODO: Complete Dataset
+
+  }
+
+  get.Seasonal.Data <- function(days, duration) {
     for (yr in years) {
       # Grab the dataset for each year
       if ((days$start) <= "12-01" && (days$start) > "09-01") {
@@ -165,10 +175,24 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
             as.Date(paste(yr, days$end, sep="-")), by = "day")
       }
       tmp <- subset(data, as.Date(DATE,format = "%m-%d-%Y") %in% dates)
+      return(tmp)
+  }
+
+  # This function determines the maximum or minimum value for each year in a
+  # dataset, then returns a new dataset with this information
+  rolling.BlockMaxima <- function(days, duration) {
+    block_max = c()
+    log <- file.Setup()$info
+    tmp <- get.Seasonal.Data(years, days, duration)
       # Double check for complete data
       tmp <- tmp %>%
           mutate(DATE = as.Date(DATE)) %>%
           complete(DATE = dates)
+
+      # # # # # # # # # # # #
+      # TODO: Replace this  #
+      # # # # # # # # # # # #
+
       # If the dataset is mostly complete, replace the empties with the mean
       if (mean(is.na(tmp$DATA)) > 0) {
         sink(log, append = TRUE)
@@ -417,7 +441,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 
   # This function develops the qcov matrix for a given fit, nonstationary or
   # stationary
-  qcov.Developer <- function(years, fit) {
+  qcov.Developer <- function(fit) {
     scaled_range <- (years - years[1])/length(years)
     lin_seq <- scaled_range
     poly_seq <- scaled_range^2
@@ -479,7 +503,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     } else {
       warning = FALSE
     }
-    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, warn=warning, ns=nonstationary))
+    return(list(x=x, y=y, ci_l=ci_l, ci_u=ci_u, warn=warning, ns=nonstationary,
+    data=df))
   }
 
   # These function handles plot development for this codebase
@@ -627,19 +652,21 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   fits <- list()
   return_vals <- list()
 
-  # Data fixes and other setup
+  # # # #
+  # # Data Fixes
+  # # # #
   names(data) <- c("DATE", "DATA")
   data$DATE <- as.POSIXct(data$DATE)
   log <- file.Setup()$info
   close(file(log, open="w"))
+  complete.Data()
 
   # # # # # # # # # # # # # # # #
   # # Begin Analysis for IDF  # #
   # # # # # # # # # # # # # # # #
 
   # Determine the yearly maximum's trend
-  block_max <- rolling.BlockMaxima(year.Range(season.Setup()),
-      duration.Setup(1, season.Setup()), 1)
+  block_max <- rolling.BlockMaxima(duration.Setup(1, season.Setup()), 1)
   if (is.null(block_max)) {
     return(NULL)
   }
@@ -651,14 +678,14 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   if(!is.null(dir)) {
     trend.Plot(block_max, 1)
   }
+
   # For each duration calculate the IDF
   for (i in 1:length(durations)) {
     print(paste("Analyzing Duration", durations[i]))
     return_vals[[i]] <- list()
     dur_init <- duration.Setup(durations[i], season.Setup())
     # Apply rolling mean block maxima
-    extremes[[i]] <- rolling.BlockMaxima(year.Range(season.Setup()), dur_init,
-        durations[i])
+    extremes[[i]] <- rolling.BlockMaxima(dur_init, durations[i])
 
     # Plot trends (as given by Mann Kendall Test, lm(), and a prediction of the
     # quadratic fit)
@@ -673,7 +700,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     fits[[i]] <- tmp_fits
     new_best = best.Fit(fits[[i]])
     if (is.null(method) || method == "MLE") {
-      v <- qcov.Developer(extremes[[i]]$YEAR, new_best)
+      v <- qcov.Developer(new_best)
     } else {
       v <- NULL
     }
@@ -800,6 +827,7 @@ s = "summer"
 # for(val in data_cols)
 # for(city in cities) {
 city <- cities[2]
+returns <- list()
   print(paste("Analyzing data from", city))
   for (loc in names(data[[city]])) {
     print(paste("Analyzing", loc))
@@ -819,9 +847,13 @@ city <- cities[2]
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
       print(head(test))
-      returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
+      returns[[loc]] <- IDF(data=test, season=s, method = "Bayesian", dir=directory,
+          stationary = TRUE)
   }
 # }
+
+# source("urban_test.R")
+# final.Test(names(data[[city]]), returns)
 
 print("End analysis")
 print(error)
