@@ -15,8 +15,8 @@ final.Test <- function(locations, df) {
     for (i in 2:length(df[[loc]])) {
       if (max(data[[i]]$DATA > max(data[[i-1]]$DATA)) {
         print("ERROR")
-      }
-    }
+    #   }
+    # }
   }
 }
 
@@ -33,3 +33,7 @@ test <- function(a) {
   a <- test3()
   return(a)
 }
+
+test <- test %>%
+  mutate(DATE = as.Date(DATE)) %>%
+  complete(DATE = seq.Date(min(DATE), max(DATE), by="day"))

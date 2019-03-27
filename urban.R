@@ -1,7 +1,7 @@
 library(tidyverse)
 library(extRemes)
 library(zoo)
-library(plotly)
+library(Hmisc)
 library(lubridate)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -39,7 +39,10 @@ library(lubridate)
 warn_fits <<- list()
 warn_data <<- list()
 w <<- 1
+.i <<- 1
 error <<- c(0,0,0,0,0)
+new_test <<- list()
+new_test2 <<- list()
 names(error) <- c("CI", "CI-R", "PLOT", "FEVD", "BFs")
 
 IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
@@ -149,19 +152,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       return(list(start=dur_start, end=dur_end))
   }
 
-
-  # This function handles incomplete data.
-  complete.Data <- function() {
-    days <- duration.Setup(max(durations), season.Setup())
-    duration <- max(durations)
-    tmp <- get.Seasonal.Data(days, duration)
-
-    #TODO: Complete Dataset
-
-  }
-
-  get.Seasonal.Data <- function(days, duration) {
-    for (yr in years) {
+  # This function returns the season data for a given year
+  get.Seasonal.Data <- function(yr, days, duration) {
       # Grab the dataset for each year
       if ((days$start) <= "12-01" && (days$start) > "09-01") {
         if((leap_year(yr+1)) && (days$start == "12-01")) {
@@ -178,73 +170,57 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       return(tmp)
   }
 
+  # This function handles incomplete data.
+  complete.Data <- function() {
+    days <- duration.Setup(max(durations), season.Setup())
+    duration <- max(durations)
+    tmp2 <- list()
+    for (yr in years) {
+      tmp <- get.Seasonal.Data(yr, days, duration)
+      tmp2 <- rbind(tmp2, tmp)
+
+      sink(log, append = TRUE)
+      print(paste("NA data for duration ", duration, ":", sep=""))
+      print(paste(mean(is.na(tmp$DATA)), "% NA in ", yr), sep = "")
+      sink()
+      # If less than 25% of the data is missing, impute predicted values
+      # as given by Hmisc's transcan "impute" function
+      if (mean(is.na(tmp$DATA)) < 0.25) {
+        tmp$DATA <- as.numeric(impute(tmp$DATA))
+        data[match(tmp$DATE, data$DATE),] <- tmp
+      }
+    }
+
+    sink(log, append = TRUE)
+    print(paste("NA data for whole dataset:", sep=""))
+    print(paste(mean(is.na(tmp2$DATA)), "% NA"), sep = "")
+    sink()
+
+    print(tmp2)
+    new_test2[[1]] <<- tmp2
+    if(mean(is.na(tmp2$DATA)) > 0.25) {
+      sink(log, append = TRUE)
+      print("Location skipped due to lack of data for given season")
+      sink()
+      return(NULL)
+    }
+
+    return(data)
+  }
+
   # This function determines the maximum or minimum value for each year in a
   # dataset, then returns a new dataset with this information
   rolling.BlockMaxima <- function(days, duration) {
     block_max = c()
     log <- file.Setup()$info
-    tmp <- get.Seasonal.Data(years, days, duration)
-      # Double check for complete data
-      tmp <- tmp %>%
-          mutate(DATE = as.Date(DATE)) %>%
-          complete(DATE = dates)
-
-      # # # # # # # # # # # #
-      # TODO: Replace this  #
-      # # # # # # # # # # # #
-
-      # If the dataset is mostly complete, replace the empties with the mean
-      if (mean(is.na(tmp$DATA)) > 0) {
-        sink(log, append = TRUE)
-        print(paste("NA data years for duration ", duration, ":", sep=""))
-        print(paste(mean(is.na(tmp$DATA)), "% NA in ", yr), sep = "")
-        sink()
-        if (mean(is.na(tmp$DATA)) < 0.5) {
-        tmp <- tmp %>%
-            replace_na(DATA = mean(tmp$DATA, na.rm=TRUE))
-        }
-      }
-      # Else wait till end to take average of previous and following year
-
+    for (yr in years) {
+      tmp <- get.Seasonal.Data(yr, days, duration)
       # Find rolling mean and add save max value for the year
       tmp <- rollmean(tmp$DATA, duration, align = "center")
+      # Given NA values exist, the extreme will be NA, else max/min will be found
       block_max <- rbind(block_max, cbind.data.frame(yr, get(extreme)(tmp)))
     }
     names(block_max) <- c("YEAR", "DATA")
-    # Handle missing values
-    NAs <- which(is.na(block_max$DATA))
-    if (length(NAs) == 0) {
-      return(block_max)
-    } else {
-      # Note the NA location
-    }
-    # Predict values
-    if (mean(is.na(block_max$DATA)) > 0.70) {
-      sink(log, append = TRUE)
-      print("LOCATION EXCLUDED FROM STUDY")
-      print(block_max$YEAR[NAs])
-      sink()
-      block_max <- NULL
-      return(block_max)
-    }
-    lm <- lm(block_max$DATA ~ block_max$YEAR, na.action = na.omit)
-    # And then fill
-    if (is.na(block_max$YEAR[1])) {
-      block_max <- subset(block_max, YEAR != years[1])
-    }
-    if (is.na(block_max$YEAR[length(years)])) {
-        block_max <- subset(block_max, YEAR != years[length(years)])
-    }
-    NAs <- which(is.na(block_max$DATA))
-    if (length(NAs) == 0) {
-      return(block_max)
-    }
-    new <- data.frame(YEAR = block_max$YEAR)
-    prediction <- predict(lm, newdata = new, interval = "confidence", level = .9)
-    for (val in NAs) {
-      r_pred <- runif(1, prediction[val,1], prediction[val,3])
-      block_max$DATA[val] <- r_pred
-    }
     return(block_max)
   }
 
@@ -273,8 +249,10 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     if ((!.forceGEV) && is.null(type)) {
       j <- 2
       warn_data <<- df
-      fits[[1]] <- fevd(df$DATA, df, type="Gumbel", method = .method, iter = it)
-      fits[[2]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it)
+      fits[[1]] <- fevd(df$DATA, df, type="Gumbel", method = .method, iter = it,
+          na.action = na.omit)
+      fits[[2]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it,
+          na.action = na.omit)
       lr = lr.test(fits[[1]], fits[[2]])
       if (lr$p.value < 0.05) {
         type <- "GEV"
@@ -282,7 +260,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         type <- "Gumbel"
       }
     } else if (.forceGEV) {
-      fits[[1]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it)
+      fits[[1]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it,
+          na.action = na.omit)
       if (class(fits[1]) == "character") {
         error[4] <<- error[4] + 1
         warn_data[w] <<- df
@@ -290,42 +269,47 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       }
       type <- "GEV"
     } else {
-      fits[[1]] <- fevd(df$DATA, df, type=type, method = .method, iter = it)
+      fits[[1]] <- fevd(df$DATA, df, type=type, method = .method, iter = it,
+          na.action = na.omit)
     }
     data_years <- length(years)
     # If p < 0.05 the data is considered nonstationary
     if ((p < 0.05) && (stationary == FALSE)) {
       ### Fits with location ~ year or ~year^2 ###
       fits[[j+1]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
-          location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE))
+          location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
+          na.action = na.omit)
       fits[[j+2]] <- fevd(df$DATA, df, type = type, method = .method, iter = 1000,
-          location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE))
+          location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
+          na.action = na.omit)
 
       ### Fits with scale ~ year ###
       fits[[j+3]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
-        scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1), use.phi = TRUE)
+        scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
+        use.phi = TRUE, na.action = na.omit)
 
       ### Fits with location ~ year and scale ~ year ###
       fits[[j+4]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
           scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
-          use.phi = TRUE)
+          use.phi = TRUE, na.action = na.omit)
       fits[[j+5]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
           scale.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
-          use.phi = TRUE)
+          use.phi = TRUE, na.action = na.omit)
       if (polyFits) {
         ### Fits with scale ~ year^2 ###
         fits[[j+6]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
-            scale.fun = ~ poly(YEAR, 2), use.phi = TRUE)
+            scale.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
+            use.phi = TRUE, na.action = na.omit)
         fits[[j+7]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
             location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
             scale.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
-            use.phi = TRUE)
+            use.phi = TRUE, na.action = na.omit)
         fits[[j+8]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
             location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
             scale.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
-            use.phi = TRUE)
+            use.phi = TRUE, na.action = na.omit)
       }
     }
     names(fits) <- seq(1, length(fits))
@@ -442,12 +426,19 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # This function develops the qcov matrix for a given fit, nonstationary or
   # stationary
   qcov.Developer <- function(fit) {
+    # Setup
     scaled_range <- (years - years[1])/length(years)
     lin_seq <- scaled_range
     poly_seq <- scaled_range^2
     lin_par <- c("mu1", "phi1")
     quad_par <- c("mu2", "phi2")
-    params <- intersect(lin_par, names(fit$results$par))
+
+    # For linear parameters...
+    if (method == "Bayesian") {
+      params <- intersect(lin_par, colnames(fit$results))
+    } else {
+      params <- intersect(lin_par, names(fit$results$par))
+    }
     if (is_empty(params)) {
       qcov <- make.qcov(fit)
     } else {
@@ -456,13 +447,21 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         assign(val, lin_seq)
         vals[[val]] <- get(val)
       }
-      params <- intersect(quad_par, names(fit$results$par))
+
+      # For quadratic parameters...
+      if (method == "Bayesian") {
+        params <- intersect(quad_par, colnames(fit$results))
+      } else {
+        params <- intersect(quad_par, names(fit$results$par))
+      }
       for (val in params) {
         assign(val, poly_seq)
         vals[[val]] <- get(val)
       }
-      if (is.null(fit$num.pars$shape)) {
-        fit$num.pars$shape <- 0
+      if (method != "Bayesian") {
+        if (is.null(fit$num.pars$shape)) {
+          fit$num.pars$shape <- 0
+        }
       }
       qcov <- make.qcov(fit, vals = vals)
     }
@@ -478,8 +477,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       p <- cor.test(df$YEAR, df$DATA, method="kendall")$p.value
     }
     # Calculate the confidence interval
-    ci = ci(fit, alpha = alpha, return.period = rp, qcov = qcov)
-    # Error handling temp deleted
+    ci <- ci(fit, alpha = alpha, return.period = rp, qcov = qcov)
 
     # Develop confidence interval data
     x <- df$YEAR
@@ -613,7 +611,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         plot(x, z, ylim=range(c(ci_l, ci_u)), ylab="DATA", xlab="YEAR",
             main = paste(return_periods[n], "-Year Return Levels Curve", dir,
             sep=""), type = "o")
-        arrows(z, ci_l, z, ci_u, length=0.05, angle=90, code=3)
+        arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3)
         dev.off()
       }
 
@@ -656,10 +654,24 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # # Data Fixes
   # # # #
   names(data) <- c("DATE", "DATA")
+  # Fill in empty dates with "NA"
+  data <- data %>%
+    mutate(DATE = as.Date(DATE)) %>%
+    complete(DATE = seq.Date(min(DATE), max(DATE), by="day"))
   data$DATE <- as.POSIXct(data$DATE)
+  # Prepare log to be written to
   log <- file.Setup()$info
   close(file(log, open="w"))
-  complete.Data()
+  # Call more complexe data completion function
+  new_test[[1]] <<- data
+  data <- complete.Data()
+  new_test[[2]] <<- data
+  .i <<- 3
+  # If dataset is empty or unuseable, skip it...
+  if(is.null(data)) {
+    return(NULL)
+  }
+
 
   # # # # # # # # # # # # # # # #
   # # Begin Analysis for IDF  # #
@@ -667,9 +679,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 
   # Determine the yearly maximum's trend
   block_max <- rolling.BlockMaxima(duration.Setup(1, season.Setup()), 1)
-  if (is.null(block_max)) {
-    return(NULL)
-  }
+
   p_abs <- cor.test(block_max$YEAR, block_max$DATA, method = "kendall")$p.value
 
   cat(paste("Yearly Seasonal Extreme Year/Value Correlation P_val:", signif(p_abs, 4),
@@ -686,6 +696,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     dur_init <- duration.Setup(durations[i], season.Setup())
     # Apply rolling mean block maxima
     extremes[[i]] <- rolling.BlockMaxima(dur_init, durations[i])
+    new_test[[.i]] <<- extremes[[i]]
+    .i <<- .i + 1
 
     # Plot trends (as given by Mann Kendall Test, lm(), and a prediction of the
     # quadratic fit)
@@ -699,11 +711,14 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     #TODO: Do a lot of checking before proceeding...
     fits[[i]] <- tmp_fits
     new_best = best.Fit(fits[[i]])
-    if (is.null(method) || method == "MLE") {
-      v <- qcov.Developer(new_best)
-    } else {
-      v <- NULL
-    }
+
+    # if (is.null(method) || method == "MLE") {
+    #   v <- qcov.Developer(new_best)
+    # } else {
+    #   v <- NULL
+    # }
+    v <- qcov.Developer(new_best)
+
     # For each return period determine the predicted return levels
     for (j in 1:length(return_periods)) {
       rl <- return.Level(extremes[[i]], new_best, v, return_periods[j], p = p_abs)
@@ -727,6 +742,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 # # # # # # # # # # # # # # # # # # # # # #
 # # Testing for urban.R's IDF Function  # #
 # # # # # # # # # # # # # # # # # # # # # #
+start <- Sys.time()
 
 # declare data directory
 options(error = function() traceback(2))
@@ -735,6 +751,7 @@ options(error = function() traceback(2))
 # dir <- "Data"
 dir <- file.path("Data", "Rural")
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
+stationary <- TRUE
 
 durations <- c(1,2,3,4,5,6,7,10)
 seasons <- c(1,2,3,4)
@@ -743,6 +760,9 @@ seasons <- c(1,2,3,4)
 files <- system(sys_call, intern = TRUE)
 cities <- unlist(strsplit(files, "\\."))[2*(1:length(files))-1]
 data <- vector("list", length(files))
+
+#color scheme
+colors <- c("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e" "#e6ab02")
 
 # # # # # # # # # # # # # # # # #
 # # Uncomment For Cities Only # #
@@ -758,12 +778,12 @@ data <- vector("list", length(files))
 #   data[[cities[i]]] <- select(data[[cities[i]]], one_of(all_cols))
 # }
 
-# # # #
-# # Running IDF
-# # # #
+# # #
+# Running IDF
+# # #
 
 # print("Begin analysis:")
-
+#
 # # For now let's just focus on temp
 # val = "TEMP"
 # # for(val in data_cols)
@@ -781,14 +801,14 @@ data <- vector("list", length(files))
 #     test <- select(data[[city]], cols)
 #     test <- unite(test, DATE, c(YEAR, MO, DA), sep="-", remove = TRUE)
 #     test$DATE <- as.POSIXct(test$DATE)
-#     returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory)
+#     returns <- IDF(data=test, season=s, method = "Bayesian", dir=directory,
+#         stationary = stationary)
 #   }
 # }
-# # }
 
-# # # # # # # # # # # # # # # # # # #
-# # Uncomment For Rural Analysis  # #
-# # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # #
+# Uncomment For Rural Analysis  # #
+# # # # # # # # # # # # # # # # # #
 cities <- unlist(strsplit(cities, "\\_"))[2*(1:length(cities))-1]
 names(data) <- cities
 data_cols <- c("TAVG", "PRCP", "TMAX", "TMIN")
@@ -822,13 +842,14 @@ for (i in 1:length(files)) {
 print("Begin analysis:")
 
 # # For now let's just focus on temp
-val = "TMAX"
-s = "summer"
+val <- "TMAX"
+s <- "summer"
 # for(val in data_cols)
-# for(city in cities) {
-city <- cities[2]
+for(city in cities) {
+# city <- cities[3]
 returns <- list()
   print(paste("Analyzing data from", city))
+  # loc <- "MAIN"
   for (loc in names(data[[city]])) {
     print(paste("Analyzing", loc))
     # for (s in seasons) {
@@ -847,13 +868,55 @@ returns <- list()
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
       print(head(test))
-      returns[[loc]] <- IDF(data=test, season=s, method = "Bayesian", dir=directory,
-          stationary = TRUE)
+      returns[[loc]] <- IDF(data=test, season=s, method = "Bayesian",
+          dir=directory, stationary = stationary)
   }
-# }
+  if (stationary == TRUE) {
+    x <- c(1:7,10) #durations
+    rp <- c(2,20,100) #return return periods
+
+    i <- length(x) #should be # of durations
+    j <- length(rp) #should be # of return return periods
+
+    # make a new plot for each return period
+    for (n in 1:j) {
+      file <- file.path("Output",paste(city, "_R", sep=""), paste(rp[n],
+        "yr_main_IDF.jpeg", sep=""))
+      jpeg(file, width=500, height=750)
+      it <- 1
+      for (loc in names(data[[city]])) {
+        col <- color[it]
+        df <- returns[[loc]]
+        years <- df[[1]][[1]]$x
+        k <- length(years) #should be # of years of data
+        z = ci_l = ci_u <- rep(0, i) # holds data & confidence interval
+        # Handle data for each duration
+        for(m in 1:i) {
+          z[m] <- df[[m]][[n]]$y[1]
+          ci_l[m] <- df[[m]][[n]]$ci_l[1]
+          ci_u[m] <- df[[m]][[n]]$ci_u[1]
+        }
+        if (it == 1) {
+        plot(x, z, ylim=range(c(ci_l-5, ci_u+5)), ylab="DATA", xlab="YEAR",
+            main = paste(return_periods[n], "-Year Return Levels Curve", dir,
+            sep=""), type = "o", col=col)
+        } else {
+        plot(x, z, type = "o", col=col, add = TRUE)
+        }
+        arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3)
+      }
+      it <- it + 1
+      }
+    }
+    dev.off()
+  }
+}
 
 # source("urban_test.R")
 # final.Test(names(data[[city]]), returns)
 
 print("End analysis")
 print(error)
+
+end <- Sys.time()
+print(end-start)
