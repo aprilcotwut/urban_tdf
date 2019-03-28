@@ -37,3 +37,11 @@ test <- function(a) {
 test <- test %>%
   mutate(DATE = as.Date(DATE)) %>%
   complete(DATE = seq.Date(min(DATE), max(DATE), by="day"))
+
+for (loc in names(data[[city]])) {
+  df <- returns[[loc]]
+  if (!is.null(df)) {
+    locs <- append(locs, loc)
+  }
+  print(locs)
+}
