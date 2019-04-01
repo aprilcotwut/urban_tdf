@@ -42,7 +42,6 @@ w <<- 1
 .i <<- 1
 error <<- c(0,0,0,0,0)
 new_test <<- list()
-new_test2 <<- list()
 names(error) <- c("CI", "CI-R", "PLOT", "FEVD", "BFs")
 
 IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
@@ -174,10 +173,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   complete.Data <- function() {
     days <- duration.Setup(max(durations), season.Setup())
     duration <- max(durations)
-    tmp2 <- list()
     for (yr in years) {
       tmp <- get.Seasonal.Data(yr, days, duration)
-      tmp2 <- rbind(tmp2, tmp)
 
       sink(log, append = TRUE)
       print(paste("NA data for duration ", duration, ":", sep=""))
@@ -189,20 +186,6 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         tmp$DATA <- as.numeric(impute(tmp$DATA))
         data[match(tmp$DATE, data$DATE),] <- tmp
       }
-    }
-
-    sink(log, append = TRUE)
-    print(paste("NA data for whole dataset:", sep=""))
-    print(paste(mean(is.na(tmp2$DATA)), "% NA"), sep = "")
-    sink()
-
-    print(tmp2)
-    new_test2[[1]] <<- tmp2
-    if(mean(is.na(tmp2$DATA)) > 0.25) {
-      sink(log, append = TRUE)
-      print("Location skipped due to lack of data for given season")
-      sink()
-      return(NULL)
     }
 
     return(data)
@@ -248,7 +231,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     # Main function #
     if ((!.forceGEV) && is.null(type)) {
       j <- 2
-      warn_data <<- df
+      # warn_data <<- df
       fits[[1]] <- fevd(df$DATA, df, type="Gumbel", method = .method, iter = it,
           na.action = na.omit)
       fits[[2]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it,
@@ -654,23 +637,31 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # # Data Fixes
   # # # #
   names(data) <- c("DATE", "DATA")
+  # Prepare log to be written to
+  log <- file.Setup()$info
+  close(file(log, open="w"))
+  # If dataset is empty or unuseable, skip it...
+  tmp <- mean(is.na(data$DATA))
+  if (tmp > 0.25) {
+    sink(log, append = TRUE)
+    print("Location skipped due to excessive lack of data")
+    sink()
+    return(NULL)
+  } else {
+    sink(log, append = TRUE)
+    print(paste("NA data for whole dataset: ", tmp, sep=""))
+    sink()
+  }
   # Fill in empty dates with "NA"
   data <- data %>%
     mutate(DATE = as.Date(DATE)) %>%
     complete(DATE = seq.Date(min(DATE), max(DATE), by="day"))
   data$DATE <- as.POSIXct(data$DATE)
-  # Prepare log to be written to
-  log <- file.Setup()$info
-  close(file(log, open="w"))
   # Call more complexe data completion function
   new_test[[1]] <<- data
   data <- complete.Data()
   new_test[[2]] <<- data
   .i <<- 3
-  # If dataset is empty or unuseable, skip it...
-  if(is.null(data)) {
-    return(NULL)
-  }
 
 
   # # # # # # # # # # # # # # # #
@@ -732,5 +723,9 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   if (length(return_vals) >= 1) {
     main.Plot(return_vals)
   }
+  print("Error analysis:")
+  print(error)
+  return_vals$warn_data <- warn_data
+  return_vals$warn_fits <- warn_fits
   return(return_vals)
 }

@@ -1,7 +1,8 @@
 # # # # # # # # # # # # # # # # # # # # # #
-# # Main for urban.R's IDF Function  # #
+# # Main for urban.R's IDF Function  # # #
 # # # # # # # # # # # # # # # # # # # # # #
 start <- Sys.time()
+source("urban.R")
 
 # declare data directory
 options(error = function() traceback(2))
@@ -105,7 +106,7 @@ val <- "TMAX"
 s <- "summer"
 # for(val in data_cols)
 # for(city in cities) {
-city <- cities[2]
+city <- cities[3]
 returns <- list()
   print(paste("Analyzing data from", city))
   # loc <- "MAIN"
@@ -131,57 +132,76 @@ returns <- list()
       returns[[loc]] <- IDF(data=test, season=s, method = "Bayesian",
           dir=directory, stationary = stationary)
     }
-  if (stationary && !warn) {
-    x <- c(1:7,10) #durations
+
+  #TODO: Make the plots into a separate funtion outside of IDF, including this
+  if (stationary) {
+    x <- durations
     rp <- c(2,20,100) #return return periods
 
     i <- length(x) #should be # of durations
     j <- length(rp) #should be # of return return periods
 
-    # make a new plot for each return period
+    locs  <- c() #this will hold the locations of non-empty IDF analyses
     for (n in 1:j) {
-      file <- file.path("Output",paste(city, "_R", sep=""), paste(rp[n],
-        "yr_main_IDF.jpeg", sep=""))
-      jpeg(file, width=500, height=750)
-      plot(-1, ylim=c(90,110), xlim=c(0,10))
-      it <- 1
+      # These will be the zlim's (the data lim)
+      z_lim <- c(1000000,-1000000)
+      # First we must populate this...
       locs <- c()
       for (loc in names(data[[city]])) {
         df <- returns[[loc]]
         if (!is.null(df)) {
           locs <- append(locs, loc)
-          col <- colors[it]
-          years <- df[[1]][[1]]$x
-          k <- length(years) #should be # of years of data
-          z = ci_l = ci_u <- rep(0, i) # holds data & confidence interval
-          # Handle data for each duration
-          for(m in 1:i) {
-            z[m] <- df[[m]][[n]]$y[1]
-            ci_l[m] <- df[[m]][[n]]$ci_l[1]
-            ci_u[m] <- df[[m]][[n]]$ci_u[1]
+          for (m in 1:i) {
+            tmp_z <- c(min(df[[m]][[n]]$ci_l), max(df[[m]][[n]]$ci_u))
+            z_lim[1] <- min(z_lim[1], tmp_z[1])
+            z_lim[2] <- max(z_lim[2], tmp_z[2])
           }
-          if (it == 1) {
-          plot(x, z, ylim=range(c((ci_l-5), (ci_u+5))), ylab="DATA", xlab="YEAR",
-              main = paste(rp[n], "-Year Return Levels Curve", dir,
-              sep=""), type = "o", col=col)
-          } else {
-          plot(x, z, type = "o", col=col, add = TRUE)
-          }
-          arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3, col=col)
-          it <- it + 1
+          print(z_lim)
         }
+      }
+      print("Final:")
+      print(z_lim)
+      print("__________")
+
+      # Go ahead and delcare the plot file for this return period
+      file <- file.path("Output",paste(city, "_R", sep=""), paste(rp[n],
+        "yr_main_IDF.jpeg", sep=""))
+      jpeg(file, width=500, height=750)
+      it <- 1
+      for (loc in locs) {
+        # Variable init
+        df <- returns[[loc]]
+        col <- colors[it] #holds a differnt color for each location
+
+        z = ci_l = ci_u <- rep(0, i) # holds data & confidence interval
+        # Handle data for each duration
+        for(m in 1:i) {
+          z[m] <- df[[m]][[n]]$y[1]
+          ci_l[m] <- df[[m]][[n]]$ci_l[1]
+          ci_u[m] <- df[[m]][[n]]$ci_u[1]
+        }
+        if (it == 1) {
+        plot(x, z, ylim=z_lim, ylab=expression(paste("Temperature [",degree,"F]")),
+            xlab="Duration (days)", main = paste(rp[n], "-Year Return Levels Curve",
+            dir, sep=""), type = "o", col=col)
+        } else {
+        lines(x, z, type = "o", col=col)
+        }
+        arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3, col=col)
+        it <- it + 1
       }
       legend("bottomright", legend = locs, lty = 1, col = colors[1:it])
       dev.off()
+      }
     }
-  }
 # }
 
 # source("urban_test.R")
 # final.Test(names(data[[city]]), returns)
 
 print("End analysis")
-print(error)
 
 end <- Sys.time()
-print(end-start)
+
+time <- end - start
+print(time)

@@ -1,0 +1,18 @@
+[1] "NA data for whole dataset: 0.0186620729256388"
+Yearly Seasonal Extreme Year/Value Correlation P_val: 0.06379 
+DIC vals for duration 1 :
+[1] 516.1662
+DIC vals for duration 2 :
+[1] 480.6195
+DIC vals for duration 3 :
+[1] 508.7655
+DIC vals for duration 4 :
+[1] 491.1268
+DIC vals for duration 5 :
+[1] 496.0848
+DIC vals for duration 6 :
+[1] 484.8293
+DIC vals for duration 7 :
+[1] 473.9951
+DIC vals for duration 10 :
+[1] 460.2216
