@@ -698,7 +698,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     # Fit models and determine return levels
     cat(paste("DIC vals for duration", durations[i], ":\n", sep=" "), file = log,
         append = TRUE)
-    tmp_fits <- make.Fits(extremes[[i]], it = 2000, p = p_abs)
+    tmp_fits <- make.Fits(extremes[[i]], it = 4000, p = p_abs)
     #TODO: Do a lot of checking before proceeding...
     fits[[i]] <- tmp_fits
     new_best = best.Fit(fits[[i]])

@@ -1,0 +1,54 @@
+[1] "NA data for whole dataset: 0.001388246182323"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2001"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2002"
+[1] "NA data for duration 10:"
+[1] "0.0792079207920792 % NA in  2003"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2004"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2005"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2006"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2007"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2008"
+[1] "NA data for duration 10:"
+[1] "0.0495049504950495 % NA in  2009"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2010"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2011"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2012"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2013"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2014"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2015"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2016"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2017"
+[1] "NA data for duration 10:"
+[1] "0 % NA in  2018"
+Yearly Seasonal Extreme Year/Value Correlation P_val: 0.0917 
+DIC vals for duration 1 :
+[1] 262.8166
+DIC vals for duration 2 :
+[1] 259.6861
+DIC vals for duration 3 :
+[1] 242.5643
+DIC vals for duration 4 :
+[1] 227.9579
+DIC vals for duration 5 :
+[1] 219.2958
+DIC vals for duration 6 :
+[1] 221.9402
+DIC vals for duration 7 :
+[1] 224.2625
+DIC vals for duration 10 :
+[1] 229.6505

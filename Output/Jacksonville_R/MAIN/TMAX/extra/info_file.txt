@@ -79,18 +79,18 @@
 [1] "0 % NA in  2018"
 Yearly Seasonal Extreme Year/Value Correlation P_val: 0.5374 
 DIC vals for duration 1 :
-[1] 481.3372
+[1] 479.7322
 DIC vals for duration 2 :
-[1] 482.4769
+[1] 480.0549
 DIC vals for duration 3 :
-[1] 483.7102
+[1] 485.3972
 DIC vals for duration 4 :
-[1] 487.9409
+[1] 486.2835
 DIC vals for duration 5 :
-[1] 482.8037
+[1] 484.271
 DIC vals for duration 6 :
-[1] 483.3334
+[1] 485.3806
 DIC vals for duration 7 :
-[1] 491.6918
+[1] 488.7636
 DIC vals for duration 10 :
-[1] 487.1428
+[1] 488.7507
