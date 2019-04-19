@@ -11,8 +11,9 @@ options(error = function() traceback(2))
 # # Update based on rural city only analysis # #
 # dir <- "Data"
 dir <- file.path("Data", "Rural")
+# dir <- file.path("Data", "Long")
 sys_call <- paste("ls", dir, "| grep .csv", sep = " ")
-stationary <- TRUE
+stationary <- FALSE
 
 durations <- c(1,2,3,4,5,6,7,10)
 seasons <- c(1,2,3,4)
@@ -21,6 +22,12 @@ seasons <- c(1,2,3,4)
 files <- system(sys_call, intern = TRUE)
 cities <- unlist(strsplit(files, "\\."))[2*(1:length(files))-1]
 data <- vector("list", length(files))
+
+# this gathers the sites info to use as covariates
+site_dir <- file.path("Data", "Sites_Info")
+sys_call <- paste("ls", site_dir, "| grep .csv", sep = " ")
+site_files <- system(sys_call, intern = TRUE)
+
 
 # # # # # # # # # # # # # # # # #
 # # Uncomment For Cities Only # #
@@ -103,8 +110,8 @@ print("Begin analysis:")
 val <- "TMAX"
 s <- "summer"
 # for(val in data_cols)
-# for(city in cities) {
-city <- cities[2]
+for(city in cities) {
+# city <- cities[2]
 returns <- list()
   print(paste("Analyzing data from", city))
   # loc <- "MAIN"
@@ -127,12 +134,11 @@ returns <- list()
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
       print(head(test))
-      returns[[loc]] <- IDF(data=test, season=s, method = "Bayesian",
+      returns[[loc]] <- IDF(data=test, season=s, method = "MLE",
           dir=directory, stationary = stationary)
     }
     returns.plot(returns, names(data[[city]]), stationary)
-
-# }
+}
 
 # source("urban_test.R")
 # final.Test(names(data[[city]]), returns)
@@ -140,6 +146,8 @@ returns <- list()
 print("End analysis")
 
 end <- Sys.time()
-
 time <- end - start
 print(time)
+
+save(returns, file = file.path("Output", paste0(format(end,
+  "%Y%m%d_%H%M%S_"), "data.RData")))

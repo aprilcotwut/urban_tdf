@@ -51,6 +51,7 @@ returns.plot <- function(returns, loc_names, stationary) {
       arrows(x, ci_l, x, ci_u, length=0.05, angle=90, code=3, col=col)
       it <- it + 1
     }
+    legend("bottomright", legend = locs, lty = 1, col = colors[1:it])
     dev.off()
   }
 

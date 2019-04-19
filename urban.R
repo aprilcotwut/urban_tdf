@@ -15,7 +15,8 @@ library(lubridate)
 # Inputs:
 #    data - This should be a list or dataframe with the first column containing
 #       the data as a POSIXct type or a character type in %Y-%m-%d
-#       format, and the second column containing the data to analyze.
+#       format, the second column containing the data to analyze, and any
+#       following colomns should be potential covariates.
 #    durations - This should be the a vector containing the various day-long
 #       durations you wish to use in your IDF. The default is c(1:7,10). NOTE:
 #       this should be from the smallest duration to the longest.
@@ -39,12 +40,15 @@ library(lubridate)
 #       covariates when fitting data.
 #    use.phi - Uses a logarithmic derivation of scale, see extRemes
 #       documentation for more info.
-#
+#    exhaustive - A boolean indicating whether all models should be fit or
+#       whether assumptions should be made to "cut out" unlikely canidates.
 # Outputs:
 #
 # Author: April Walker
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+#TODO: impliment exhaustive component to cut down run time, impliment additional
+# covariates. 
 
 # Some global variables that should be reformatted to be part of a test file
 warn_fits <<- list()
@@ -61,7 +65,8 @@ names(error) <- c("CI", "CI-R", "PLOT", "FEVD", "BFs")
 # # #
 IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         season, extreme = "max", forceGEV = FALSE, method = NULL, dir = NULL,
-        polyFits = FALSE, alpha = 0.05, stationary = FALSE, use.phi = TRUE) {
+        polyFits = FALSE, alpha = 0.05, stationary = FALSE, use.phi = TRUE,
+        exhaustive = TRUE) {
 
   # This season determines the start and end day of the observation based on
   # what season is indicated to be studied
@@ -279,7 +284,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       fits[[j+1]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
           use.phi = use.phi, na.action = na.omit)
-      fits[[j+2]] <- fevd(df$DATA, df, type = type, method = .method, iter = 1000,
+      fits[[j+2]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 2, raw = TRUE),
           use.phi = use.phi, na.action = na.omit)
 
@@ -324,50 +329,53 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 
   # Given a vector of fits, this functon detemines and returns the best fit
   # based on AIC, or if unavaliable, MLE
-  estimate.GOF <- function(fits) {
-    # if fits only contains one fit
-    if(!is.null(fits$call)) {
-      best_fits <- fits
-      return(best_fits)
-    }
-    # else determine the best fit
-    if (is.null(method) || method == "MLE") {
-      AIC <- c()
-      MLE <- c()
-      for (i in 1:length(fits)) {
-        tmp <- fits[[i]]
-        MLE <- append(MLE, tmp$results$value)
-        try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
-        }
-        if (!is.na(sum(AIC))) {
-          best_fit <- fits[[which.min(AIC)]]
-        } else {
-          if(is.null(MLE)) {
-            print(fits)
+  best.Fit <- function(fits) {
+    # Interval function to determine best fit between models of
+    # similar complexity.
+    estimate.GOF <- function(fits) {
+      # if fits only contains one fit
+      if(!is.null(fits$call)) {
+        best_fits <- fits
+        return(best_fits)
+      }
+      # else determine the best fit
+      if (is.null(method) || method == "MLE") {
+        AIC <- c()
+        MLE <- c()
+        for (i in 1:length(fits)) {
+          tmp <- fits[[i]]
+          MLE <- append(MLE, tmp$results$value)
+          try({AIC <- append(AIC, as.double(summary(tmp$AIC)))})
           }
-          best_fit <- fits[[which.min(MLE)]]
-        }
-      return(best_fit)
-      } else if (method == "Bayesian") {
-        DIC <- c()
-        if(length(fits) > 1) {
-          for(i in 1:length(fits)) {
-            tmp <- fits[[i]]
-            try({DIC <- append(DIC, as.double(summary(tmp$DIC)))})
+          if (!is.na(sum(AIC))) {
+            best_fit <- fits[[which.min(AIC)]]
+          } else {
+            if(is.null(MLE)) {
+              print(fits)
+            }
+            best_fit <- fits[[which.min(MLE)]]
           }
-          if (!is.na(sum(DIC))) {
-            best_fit <- fits[[which.min(DIC)]]
+        return(best_fit)
+        } else if (method == "Bayesian") {
+          DIC <- c()
+          if(length(fits) > 1) {
+            for(i in 1:length(fits)) {
+              tmp <- fits[[i]]
+              try({DIC <- append(DIC, as.double(summary(tmp$DIC)))})
+            }
+            if (!is.na(sum(DIC))) {
+              best_fit <- fits[[which.min(DIC)]]
+            } else {
+              best_fit <- fits[[1]]
+            }
           } else {
             best_fit <- fits[[1]]
           }
-        } else {
-          best_fit <- fits[[1]]
-        }
-      return(best_fit)
+        return(best_fit)
+      }
     }
-  }
 
-  best.Fit <- function(fits) {
+    # Begin function
     if(length(fits) == 1) {
       return(fits[[1]])
     }
@@ -403,11 +411,11 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     } else if (method == "Bayesian") {
       tmp <- as.double(summary(new_best)$DIC)
       for (j in 2:length(best_fits)) {
-        factor <- as.numeric(BayesFactor(new_best, best_fits[[j]])[1],
-          method = "laplace")
+        factor <- as.numeric(BayesFactor(new_best, best_fits[[j]],
+          method = "laplace")$statistic)
         if (is.nan(factor)) {
-            factor <- as.numeric(BayesFactor(new_best, best_fits[[j]])[1],
-                method = "harmonic")
+          factor <- as.numeric(BayesFactor(new_best, best_fits[[j]],
+            method = "harmonic")$statistic)
         }
         factors <<- append(factors, factor)
         if (is.nan(factor)) {
@@ -421,7 +429,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
             new_best <- best_fits[[j]]
           }
         }
-        else if (factor > 1.001) {
+        else if (factor > 1) {
           new_best <- best_fits[[j]]
         }
       }
@@ -722,7 +730,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     # Fit models and determine return levels
     cat(paste("DIC vals for duration", durations[i], ":\n", sep=" "), file = log,
         append = TRUE)
-    tmp_fits <- make.Fits(extremes[[i]], it = 4000, p = p_abs)
+    tmp_fits <- make.Fits(extremes[[i]], it = 10000, p = p_abs)
     #TODO: Do a lot of checking before proceeding...
     fits[[i]] <- tmp_fits
     new_best = best.Fit(fits[[i]])
