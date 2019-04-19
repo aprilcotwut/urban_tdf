@@ -4,3 +4,38 @@
 # Ignore my datasets
 Data/
 
+# Ignore my commit log
+commit.log
+
+# Ignore the saved objects
+*.RData
+
+# # #
+# Ignore the other bullshit cross-validation
+# # #
+*MAIN/
+# Chicago
+**AURORA/
+**DE_KALB/
+**DIXON_1_W/
+# Houston
+**COLOMBUS/
+**CYPRESS/
+**LIBERTY/
+# Jacksonville
+**WASHINGTON_STATE_PARK/
+**GLEN_ST_MARY_1_W/
+# Kansas
+**EFFINGHAM/
+**LAWRENCE/
+**OLATHE_JOHNSON_CO_INDUSTRIAL_AIRPORT/
+# NYC
+**BELVIDERE_BRIDGE/
+**BOONTON_1_SE/
+**CANOE_BROOK/
+# Phoenix
+**LAVEEN_3_SSE/
+**WICKENBURG/
+**WHITTMANN_1_SE/
+**YOUNGTOWN/
+
