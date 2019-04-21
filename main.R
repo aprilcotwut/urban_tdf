@@ -111,7 +111,7 @@ val <- "TMAX"
 s <- "summer"
 # for(val in data_cols)
 for(city in cities) {
-# city <- cities[2]
+# city <- cities[3]
 returns <- list()
   print(paste("Analyzing data from", city))
   # loc <- "MAIN"
@@ -134,7 +134,7 @@ returns <- list()
       test <- select(data[[city]][[loc]], cols)
       test$DATE <- as.POSIXct(test$DATE)
       print(head(test))
-      returns[[loc]] <- IDF(data=test, season=s, method = "MLE",
+      returns[[loc]] <- IDF(data=test, season=s, method = "MLE", alpha = 0.1,
           dir=directory, stationary = stationary)
     }
     returns.plot(returns, names(data[[city]]), stationary)

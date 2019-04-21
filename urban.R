@@ -48,7 +48,7 @@ library(lubridate)
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 #TODO: impliment exhaustive component to cut down run time, impliment additional
-# covariates. 
+# covariates.
 
 # Some global variables that should be reformatted to be part of a test file
 warn_fits <<- list()
@@ -259,7 +259,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       fits[[2]] <- fevd(df$DATA, df, type="GEV", method = .method, iter = it,
           na.action = na.omit, use.phi= use.phi)
       lr = lr.test(fits[[1]], fits[[2]])
-      if (lr$p.value < 0.05) {
+      if (lr$p.value < alpha) {
         type <- "GEV"
       } else {
         type <- "Gumbel"
@@ -279,7 +279,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     }
     data_years <- length(years)
     # If p < 0.05 the data is considered nonstationary
-    if ((p < 0.05) && (stationary == FALSE)) {
+    if ((p < alpha) && (stationary == FALSE)) {
       ### Fits with location ~ year or ~year^2 ###
       fits[[j+1]] <- fevd(df$DATA, df, type = type, method = .method, iter = it,
           location.fun = ~ poly(((YEAR - years[1])/ data_years), 1, raw = TRUE),
@@ -319,10 +319,18 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     }
     names(fits) <- seq(1, length(fits))
     for (val in fits) {
-      tmp <- as.double(summary(val)$DIC)
-      sink(log, append = TRUE)
-      print(tmp)
-      sink()
+      if(.method == "Bayesian") {
+        tmp <- as.double(summary(val)$DIC)
+        sink(log, append = TRUE)
+        print(tmp)
+        sink()
+      } else {
+        tmp <- as.double(summary(val)$AIC)
+        tmp <- as.double(summary(val)$BIC)
+        sink(log, append = TRUE)
+        print(tmp)
+        sink()
+      }
     }
     return(fits)
   }
@@ -403,7 +411,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     if (is.null(method) || method == "MLE") {
       for (j in 2:length(best_fits)) {
         lr <- lr.test(new_best, best_fits[[j]])
-        if (lr$p.value < 0.05) {
+        if (lr$p.value < alpha) {
           new_best <- best_fits[[j]]
         }
       }
@@ -552,7 +560,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     # Add quadratic plot line
     trend <- lm(df$DATA ~ poly(df$YEAR, 2, raw = TRUE))
     predicted <- predict(trend, data.frame(x=df$YEAR),
-        interval='confidence', level=0.95)
+        interval='confidence', level=(1-alpha))
     lines(df$YEAR, predicted[,1], col="#5e3c99")
     dev.off()
   }
@@ -718,18 +726,21 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     return_vals[[i]] <- list()
     dur_init <- duration.Setup(durations[i], season.Setup())
     # Apply rolling mean block maxima
+    print("Applying Block Maxima...")
     extremes[[i]] <- rolling.BlockMaxima(dur_init, durations[i])
     new_test[[.i]] <<- extremes[[i]]
     .i <<- .i + 1
 
     # Plot trends (as given by Mann Kendall Test, lm(), and a prediction of the
     # quadratic fit)
+    print("Plotting trends...")
     if(!is.null(dir)) {
       trend.Plot(extremes[[i]], i)
     }
     # Fit models and determine return levels
     cat(paste("DIC vals for duration", durations[i], ":\n", sep=" "), file = log,
         append = TRUE)
+    print("Developing fits...")
     tmp_fits <- make.Fits(extremes[[i]], it = 10000, p = p_abs)
     #TODO: Do a lot of checking before proceeding...
     fits[[i]] <- tmp_fits
@@ -739,6 +750,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
     plot(new_best, type="trace")
     dev.off()
 
+    print("Finding return levels and CI...")
     v <- qcov.Developer(new_best)
 
     # For each return period determine the predicted return levels
