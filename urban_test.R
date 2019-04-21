@@ -4,6 +4,8 @@
 # Author: April Walker                                                        #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# This is all bullshit rn btw...
+
 # This script is a final check on the returned values from IDF. TODO: In the
 # future, this shoudl be replaced with individual unit tests which run with
 # IDF().
