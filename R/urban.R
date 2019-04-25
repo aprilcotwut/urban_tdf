@@ -4,6 +4,7 @@ library(zoo)
 library(Hmisc)
 library(lubridate)
 
+source("R/setup.R")
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # IDF : This function developes a IDF Curve for the daily observations of
 # # #     some data type by utilizing the GEV distribution family to develop
@@ -67,136 +68,42 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         season, extreme = "max", forceGEV = FALSE, method = NULL, dir = NULL,
         polyFits = FALSE, alpha = 0.05, stationary = FALSE, use.phi = TRUE,
         exhaustive = TRUE) {
+  # Early data cleanup
+  names(data) <- c("DATE", "DATA")
 
-  # This season determines the start and end day of the observation based on
-  # what season is indicated to be studied
-  season.Setup <- function() {
-    if ((season == 1) | (season == "winter")) {
-      start_day <- "2999-12-01"
-      end_day <- "2999-02-28"
-      season <- "winter"
-    } else if ((season == 2) | (season == "spring")) {
-      start_day <- "2999-03-01"
-      end_day <- "2999-05-31"
-      season <- "spring"
-    } else if ((season == 3) | (season == "summer")) {
-      start_day <- "2999-06-01"
-      end_day <- "2999-08-31"
-      season <- "summer"
-    } else if ((season = 4) | (season == "fall") | (season == "autumn")) {
-      start_day <- "2999-09-01"
-      end_day <- "2999-11-30"
-      season <- "fall"
-    }
-    return(list(start=start_day, end=end_day, season=season))
-  }
+  # Important object declarations
+  days <- season.Setup(season)
+  files <- file.Setup(days, dir, return_periods, durations)
+  years <- year.Range(days, data)
 
-  # This function develops the directories and filenames if the user chooses
-  # to plot the IDF findings
-  file.Setup <- function() {
-    season = season.Setup()$season
-    extra <- file.path(dir, "extra")
-    idf <- file.path(dir, "idf")
-
-    season_extra <- file.path(extra, season)
-    season_idf <- file.path(idf, season)
-
-    dir.create(dir)
-    dir.create(extra)
-    dir.create(idf)
-    dir.create(season_extra)
-    dir.create(season_idf)
-
-    trend_file <- c()
-    rl_file <- c()
-    trace_file <- c()
-    idf_file <- c()
-    idf2_file <- c()
-    info_file <- file.path(extra, "info_file.txt")
-    for (i in 1:length(durations)) {
-      trend_file[i] <- paste(season_extra, "/trend-", durations[i], "day.jpeg", sep="")
-      rl_file[i] <- paste(season_extra, "/rlplot-", durations[i], "day.jpeg", sep="")
-      trace_file[i] <- paste(season_extra, "/trace-", durations[i], "day.jpeg", sep="")
-      for (j in 1:length(return_periods)) {
-        idf_file[(i - 1)*length(return_periods) + j] <- paste(season_extra, "/idf-",
-            return_periods[j], "year-", durations[i], "day.jpeg", sep = "")
-      }
-    }
-    for (j in 1:length(return_periods)) {
-      idf2_file[j] <- paste(season_idf, "/idf-", return_periods[j], "year.jpeg",
-          sep = "")
-    }
-    return(list(rl=rl_file, idf=idf_file, idf2=idf2_file, trend=trend_file,
-        info=info_file, trace=trace_file))
-  }
-
-  files <- file.Setup()
-
-  # This function reads in the data and determines the year range
-  year.Range <- function(days) {
-    start <- as.Date(min(data$DATE))
-    end <- as.Date(max(data$DATE))
-    # Check the starting year has the data we need
-    if (format(start, format="%m-%d") < days$start) {
-      start <- format(start, format = "%Y")
-    } else {
-      start <- format(start, format = "%Y")
-      start <- as.numeric(start) + 1
-    }
-    # Check the ending year has the data we need
-    if (format(end, format="%m-%d") > days$end) {
-      end <- format(end, format = "%Y")
-    } else {
-      end <- format(end, format = "%Y")
-      end <- as.numeric(end) - 1
-    }
-    start <- as.numeric(start)
-    end <- as.numeric(end)
-    return(start:end)
-  }
-
-  years <- year.Range(season.Setup())
-
-  # This devlops the start and end day for a particular duration, and assumes
-  # the rolling average is calculated to be centered around the period of
-  # interest
-  duration.Setup <- function(duration, days) {
-      if (duration%%2 == 1) {
-        adj <- (duration-1)/2
-        dur_start <- format((as.Date(days$start) - adj), format="%m-%d")
-        dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
-      } else if (duration%%2 == 0) {
-        adj <- duration/2
-        dur_start <- format((as.Date(days$start) - adj + 1), format="%m-%d")
-        dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
-      }
-      return(list(start=dur_start, end=dur_end))
-  }
 
   # This function returns the season data for a given year
-  get.Seasonal.Data <- function(yr, days, duration) {
-      # Grab the dataset for each year
-      if ((days$start) <= "12-01" && (days$start) > "09-01") {
-        if((leap_year(yr+1)) && (days$start == "12-01")) {
-          dates <- seq(as.Date(paste(yr, days$start, sep="-")),
-              as.Date(paste(yr + 1, "02-29", sep="-")), by = "day")
-        }
-        dates <- seq(as.Date(paste(yr, days$start, sep="-")),
-            as.Date(paste(yr + 1, days$end, sep="-")), by = "day")
-      } else {
-        dates <- seq(as.Date(paste(yr, days$start, sep="-")),
-            as.Date(paste(yr, days$end, sep="-")), by = "day")
+  get.Seasonal.Data <- function(yr, duration, time) {
+    if (class(time) != "timeframe") {
+      stop("invalid 'time' input for get.Seasonal.Data")
+    }
+    # Grab the dataset for each year
+    if ((season == "winter") & (duration > 1)) {
+      if((leap_year(yr+1)) && (time$start == "12-01")) {
+        dates <- seq(as.Date(paste(yr, time$start, sep="-")),
+            as.Date(paste(yr + 1, "02-29", sep="-")), by = "day")
       }
-      tmp <- subset(data, as.Date(DATE,format = "%m-%d-%Y") %in% dates)
-      return(tmp)
+      dates <- seq(as.Date(paste(yr, time$start, sep="-")),
+          as.Date(paste(yr + 1, time$end, sep="-")), by = "day")
+    } else {
+      dates <- seq(as.Date(paste(yr, time$start, sep="-")),
+          as.Date(paste(yr, time$end, sep="-")), by = "day")
+    }
+    tmp <- subset(data, as.Date(DATE,format = "%m-%d-%Y") %in% dates)
+    return(tmp)
   }
 
   # This function handles incomplete data.
   complete.Data <- function() {
-    days <- duration.Setup(max(durations), season.Setup())
+    time <- duration.Setup(max(durations), days)
     duration <- max(durations)
     for (yr in years) {
-      tmp <- get.Seasonal.Data(yr, days, duration)
+      tmp <- get.Seasonal.Data(yr, duration, time)
 
       sink(log, append = TRUE)
       print(paste("NA data for duration ", duration, ":", sep=""))
@@ -215,11 +122,11 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
 
   # This function determines the maximum or minimum value for each year in a
   # dataset, then returns a new dataset with this information
-  rolling.BlockMaxima <- function(days, duration) {
+  rolling.BlockMaxima <- function(duration, time) {
     block_max = c()
-    log <- file.Setup()$info
+    log <- files$info
     for (yr in years) {
-      tmp <- get.Seasonal.Data(yr, days, duration)
+      tmp <- get.Seasonal.Data(yr, duration, time)
       # Find rolling mean and add save max value for the year
       tmp <- rollmean(tmp$DATA, duration, align = "center")
       # Given NA values exist, the extreme will be NA, else max/min will be found
@@ -243,7 +150,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
       # Enter in info for managing PP, etc
     }
     # Other Setup #
-    log <- file.Setup()$info
+    log <- files$info
     years <- df$YEAR
     if (is.null(p)) {
       p <- cor.test(df$YEAR, df$DATA, method="kendall")$p.value
@@ -662,7 +569,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
   # # # # # # # # # # # # # #### MAIN FUNCTION #### # # # # # # # # # # # # #
   # # # # # # # # # # # # # ####################### # # # # # # # # # # # # #
-
+  print(paste("Beginning IDF development for", season, "dataset"))
   # # # #
   # # Simple Setup Stuff
   # # # #
@@ -676,9 +583,8 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # # # #
   # # Data Fixes
   # # # #
-  names(data) <- c("DATE", "DATA")
   # Prepare log to be written to
-  log <- file.Setup()$info
+  log <- files$info
   close(file(log, open="w"))
   # If dataset is empty or unuseable, skip it...
   tmp <- mean(is.na(data$DATA))
@@ -709,7 +615,7 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # # # # # # # # # # # # # # # #
 
   # Determine the yearly maximum's trend
-  block_max <- rolling.BlockMaxima(duration.Setup(1, season.Setup()), 1)
+  block_max <- rolling.BlockMaxima(duration = 1, time = duration.Setup(1, days))
 
   p_abs <- cor.test(block_max$YEAR, block_max$DATA, method = "kendall")$p.value
 
@@ -724,10 +630,10 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   for (i in 1:length(durations)) {
     print(paste("Analyzing Duration", durations[i]))
     return_vals[[i]] <- list()
-    dur_init <- duration.Setup(durations[i], season.Setup())
+    time <- duration.Setup(durations[i], days)
     # Apply rolling mean block maxima
     print("Applying Block Maxima...")
-    extremes[[i]] <- rolling.BlockMaxima(dur_init, durations[i])
+    extremes[[i]] <- rolling.BlockMaxima(duration = durations[i], time = time)
     new_test[[.i]] <<- extremes[[i]]
     .i <<- .i + 1
 
