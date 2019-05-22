@@ -67,7 +67,16 @@ names(error) <- c("CI", "CI-R", "PLOT", "FEVD", "BFs")
 IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
         season, extreme = "max", forceGEV = FALSE, method = NULL, dir = NULL,
         polyFits = FALSE, alpha = 0.05, stationary = FALSE, use.phi = TRUE,
-        exhaustive = TRUE) {
+        exhaustive = TRUE, abs.difference = FALSE) {
+  # # #
+  # Early check-ups
+  # # #
+  if (abs.difference && min(durations) <= 1) {
+    print("Invalid input: duration must be > 1 for abs.difference")
+    print("Removing duration 1...")
+    durations <- durations[-which(durations == 1)]
+  }
+
   # Early data cleanup
   names(data) <- c("DATE", "DATA")
 
@@ -123,12 +132,20 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # This function determines the maximum or minimum value for each year in a
   # dataset, then returns a new dataset with this information
   rolling.BlockMaxima <- function(duration, time) {
+    difference <- function(x) {
+      max(x) - min(x)
+    }
     block_max = c()
     log <- files$info
     for (yr in years) {
       tmp <- get.Seasonal.Data(yr, duration, time)
-      # Find rolling mean and add save max value for the year
-      tmp <- rollmean(tmp$DATA, duration, align = "center")
+      if (!abs.difference) {
+        # Find rolling mean and add save max value for the year
+        tmp <- rollmean(tmp$DATA, duration, align = "center")
+      } else {
+        # Find the rolling largest difference between observations
+        tmp <- rollapply(tmp$DATA, duration, difference, align = "center")
+      }
       # Given NA values exist, the extreme will be NA, else max/min will be found
       block_max <- rbind(block_max, cbind.data.frame(yr, get(extreme)(tmp)))
     }
@@ -615,8 +632,11 @@ IDF <- function(data, durations=c(1:7,10), return_periods=c(2, 20, 100),
   # # # # # # # # # # # # # # # #
 
   # Determine the yearly maximum's trend
-  block_max <- rolling.BlockMaxima(duration = 1, time = duration.Setup(1, days))
-
+  if(!abs.difference) {
+    block_max <- rolling.BlockMaxima(duration = 1, time = duration.Setup(1, days))
+  } else {
+    block_max <- rolling.BlockMaxima(duration = 2, time = duration.Setup(2, days))
+  }
   p_abs <- cor.test(block_max$YEAR, block_max$DATA, method = "kendall")$p.value
 
   cat(paste("Yearly Seasonal Extreme Year/Value Correlation P_val:", signif(p_abs, 4),

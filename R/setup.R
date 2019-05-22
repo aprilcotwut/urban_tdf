@@ -90,8 +90,8 @@ duration.Setup <- function(duration, days) {
       dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
     }
   } else if (season == "all") {
-    dur_start <- format((as.Date(days$start) - adj + 1), format="%m-%d")
-    dur_end <- format((as.Date(days$end) + adj), format="%m-%d")
+    dur_start <- format(as.Date(days$start), format="%m-%d")
+    dur_end <- format(as.Date(days$end), format="%m-%d")
   }
   time <- list(start=dur_start, end=dur_end)
   class(time) <- "timeframe"
