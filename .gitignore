@@ -1,5 +1,9 @@
 # Uncomment to ignore all my plots
-# Output/
+Output/
+Output_Bayes
+Output_Bayes2
+Output_Bayes3
+Output_MLE
 
 # Ignore my datasets
 Data/
